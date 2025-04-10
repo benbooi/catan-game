@@ -8,12 +8,12 @@ function App() {
   return (
     <ChakraProvider>
       <Box minH="100vh" bg="gray.50" py={8}>
-        <VStack spacing={8}>
+        <VStack gap={8}>
           <Text fontSize="2xl" fontWeight="bold">
             Catan
           </Text>
           
-          <HStack spacing={4}>
+          <HStack gap={4}>
             <Text>Current Player: {players[currentPlayer].name}</Text>
             <Button onClick={rollDice} colorScheme="blue">
               Roll Dice

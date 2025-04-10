@@ -1,17 +1,15 @@
-import { Box, Grid, useColorModeValue } from '@chakra-ui/react';
+import { Box, Grid } from '@chakra-ui/react';
 import { useGameStore } from '../store/gameStore';
 import { Hex } from '../types/game';
 
 const HexTile = ({ hex }: { hex: Hex }) => {
-  const bgColor = useColorModeValue(
+  const bgColor = 
     hex.type === 'desert' ? 'yellow.200' :
     hex.type === 'brick' ? 'red.200' :
     hex.type === 'lumber' ? 'green.200' :
     hex.type === 'ore' ? 'gray.200' :
     hex.type === 'grain' ? 'yellow.100' :
-    'blue.200',
-    'gray.700'
-  );
+    'blue.200';
 
   return (
     <Box

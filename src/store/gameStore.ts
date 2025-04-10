@@ -6,7 +6,6 @@ const createInitialBoard = () => {
   const vertices: Vertex[] = [];
   const edges: Edge[] = [];
   
-  // Create a simple 3x3 board for now
   const resources: Hex['type'][] = [
     'brick', 'lumber', 'ore',
     'grain', 'wool', 'desert',
@@ -14,8 +13,6 @@ const createInitialBoard = () => {
   ];
   
   resources.forEach((type, index) => {
-    const x = index % 3;
-    const y = Math.floor(index / 3);
     hexes.push({
       id: `hex-${index}`,
       type,
@@ -38,7 +35,8 @@ const createInitialPlayers = (): Player[] => {
         lumber: 0,
         ore: 0,
         grain: 0,
-        wool: 0
+        wool: 0,
+        desert: 0
       },
       score: 0,
       isAI: false
@@ -52,7 +50,8 @@ const createInitialPlayers = (): Player[] => {
         lumber: 0,
         ore: 0,
         grain: 0,
-        wool: 0
+        wool: 0,
+        desert: 0
       },
       score: 0,
       isAI: true
@@ -66,7 +65,8 @@ const createInitialPlayers = (): Player[] => {
         lumber: 0,
         ore: 0,
         grain: 0,
-        wool: 0
+        wool: 0,
+        desert: 0
       },
       score: 0,
       isAI: true
@@ -91,7 +91,7 @@ export const useGameStore = create<GameStore>((set) => ({
   rollDice: () => {
     const die1 = Math.floor(Math.random() * 6) + 1;
     const die2 = Math.floor(Math.random() * 6) + 1;
-    set((state) => ({
+    set(() => ({
       dice: {
         lastRoll: [die1, die2]
       }
