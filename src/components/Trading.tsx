@@ -1,234 +1,214 @@
-import { Box, Button, Grid, HStack, NumberInput, NumberInputField, Select, Text, VStack, useDisclosure } from '@chakra-ui/react';
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { 
+    Box, Button, Heading, VStack, HStack, Select, NumberInput, 
+    NumberInputField, NumberInputStepper, NumberIncrementStepper, 
+    NumberDecrementStepper, Text, Wrap, WrapItem, Badge, Divider 
+} from '@chakra-ui/react';
 import { useGameStore } from '../store/gameStore';
 import { ResourceType } from '../types/game';
+import { Player } from '../types/game';
 
-const RESOURCE_COLORS = {
-  brick: '#E57373',
-  lumber: '#81C784',
-  ore: '#90A4AE',
-  grain: '#FDD835',
-  wool: '#A5D6A7',
+// Define resource information for UI
+const resourceInfo: Record<ResourceType, { color: string }> = {
+    wood: { color: 'green.500' },
+    brick: { color: 'red.500' },
+    ore: { color: 'gray.500' },
+    grain: { color: 'yellow.400' },
+    wool: { color: 'gray.200' },
 };
 
-interface ResourceTradeProps {
-  type: ResourceType;
-  count: number;
-  onChange: (count: number) => void;
-}
+export function Trading() {
+  const { players, currentPlayer, dispatch, phase, tradeOffer, board } = useGameStore(state => ({ 
+      players: state.players, 
+      currentPlayer: state.currentPlayer,
+      dispatch: state.dispatch,
+      phase: state.phase,
+      tradeOffer: state.tradeOffer,
+      board: state.board // Needed for port calculations
+  }));
 
-const ResourceTrade = ({ type, count, onChange }: ResourceTradeProps) => (
-  <Box
-    p={2}
-    bg={RESOURCE_COLORS[type]}
-    borderRadius="md"
-    boxShadow="sm"
-  >
-    <VStack spacing={1}>
-      <Text fontWeight="bold" textTransform="capitalize">{type}</Text>
-      <NumberInput
-        value={count}
-        onChange={(_, value) => onChange(value)}
-        min={0}
-        max={99}
-        size="sm"
-      >
-        <NumberInputField textAlign="center" />
-      </NumberInput>
-    </VStack>
-  </Box>
-);
+  const [offerResources, setOfferResources] = useState<Partial<Record<ResourceType, number>>>({});
+  const [requestResources, setRequestResources] = useState<Partial<Record<ResourceType, number>>>({});
+  const [bankGiveResource, setBankGiveResource] = useState<ResourceType>('wood');
+  const [bankReceiveResource, setBankReceiveResource] = useState<ResourceType>('brick');
 
-export const Trading = () => {
-  const { 
-    players, 
-    currentPlayer, 
-    dispatch,
-    canOfferTrade,
-    canAcceptTrade,
-    canBankTrade,
-    tradeOffer
-  } = useGameStore();
+  const player = players[currentPlayer];
+  const canTrade = phase === 'MAIN';
 
-  const [give, setGive] = useState<Partial<Record<ResourceType, number>>>({});
-  const [want, setWant] = useState<Partial<Record<ResourceType, number>>>({});
-  const [targetPlayer, setTargetPlayer] = useState<number | null>(null);
+  // Calculate bank trade ratio for the selected resource
+  const calculateBankRatio = (resource: ResourceType): number => {
+    let minRatio = 4;
+    if (!player) return minRatio;
+    const playerVertices = Object.keys(board.vertices)
+        .map(Number)
+        .filter(id => board.vertices[id]?.building?.playerId === player.id);
+    board.ports?.forEach(port => {
+        if (port.vertices.some(pv => playerVertices.includes(pv))) {
+            if (port.type === 'generic' || port.type === resource) {
+                minRatio = Math.min(minRatio, port.ratio);
+            }
+        }
+    });
+    return minRatio;
+  };
+  const currentBankRatio = calculateBankRatio(bankGiveResource);
+
+  const handleResourceChange = (
+    type: 'offer' | 'request',
+    resource: ResourceType,
+    value: number
+  ) => {
+    const setter = type === 'offer' ? setOfferResources : setRequestResources;
+    setter(prev => ({
+      ...prev,
+      [resource]: value,
+    }));
+  };
 
   const handleOfferTrade = () => {
-    dispatch({ 
-      type: 'OFFER_TRADE',
-      give,
-      want,
-      toPlayer: targetPlayer
-    });
+      // TODO: Need UI to select target player(s) for the offer
+      console.warn('Player-to-player trade offer UI needed');
+      // Validation (basic client-side) - Store/validator handles full check
+      const offerCount = Object.values(offerResources).reduce((s, c) => s + (c || 0), 0);
+      const requestCount = Object.values(requestResources).reduce((s, c) => s + (c || 0), 0);
+      if (!canTrade || tradeOffer || (offerCount === 0 && requestCount === 0)) return; 
+      
+      // Dispatch TRADE_OFFER action
+      dispatch({ 
+          type: 'TRADE_OFFER', 
+          offer: offerResources, 
+          request: requestResources 
+      });
   };
 
   const handleAcceptTrade = () => {
-    dispatch({ type: 'ACCEPT_TRADE' });
+      if (!canTrade || !tradeOffer) return;
+      dispatch({ type: 'TRADE_ACCEPT' });
   };
 
-  const handleDeclineTrade = () => {
-    dispatch({ type: 'DECLINE_TRADE' });
+  const handleRejectTrade = () => {
+      if (!canTrade || !tradeOffer) return;
+      dispatch({ type: 'TRADE_REJECT' });
   };
 
-  const handleBankTrade = (giveType: ResourceType, wantType: ResourceType) => {
-    dispatch({
-      type: 'BANK_TRADE',
-      give: Array(4).fill(giveType),
-      want: wantType
-    });
+  const handleBankTrade = () => {
+      if (!canTrade || bankGiveResource === bankReceiveResource) return;
+      // Basic client-side check for resources
+      if (!player || (player.resources[bankGiveResource] ?? 0) < currentBankRatio) return;
+      
+      dispatch({ 
+          type: 'TRADE_BANK', 
+          give: bankGiveResource, 
+          receive: bankReceiveResource 
+      });
   };
 
-  // If there's an active trade offer for the current player
-  if (tradeOffer && tradeOffer.to === currentPlayer) {
-    const offeringPlayer = players[tradeOffer.from];
-    return (
-      <Box p={4} bg="white" borderRadius="lg" boxShadow="md">
-        <VStack spacing={4} align="stretch">
-          <Text fontSize="xl" fontWeight="bold">
-            Trade Offer from {offeringPlayer.name}
-          </Text>
-
-          <Box>
-            <Text fontWeight="bold">They Give:</Text>
-            <Grid templateColumns="repeat(5, 1fr)" gap={2}>
-              {Object.entries(tradeOffer.give).map(([type, count]) => (
-                <Box
-                  key={type}
-                  p={2}
-                  bg={RESOURCE_COLORS[type as ResourceType]}
-                  borderRadius="md"
-                  textAlign="center"
-                >
-                  <Text>{count}x {type}</Text>
-                </Box>
-              ))}
-            </Grid>
-          </Box>
-
-          <Box>
-            <Text fontWeight="bold">They Want:</Text>
-            <Grid templateColumns="repeat(5, 1fr)" gap={2}>
-              {Object.entries(tradeOffer.want).map(([type, count]) => (
-                <Box
-                  key={type}
-                  p={2}
-                  bg={RESOURCE_COLORS[type as ResourceType]}
-                  borderRadius="md"
-                  textAlign="center"
-                >
-                  <Text>{count}x {type}</Text>
-                </Box>
-              ))}
-            </Grid>
-          </Box>
-
-          <HStack justify="flex-end" spacing={4}>
-            <Button
-              colorScheme="red"
-              onClick={handleDeclineTrade}
-            >
-              Decline
-            </Button>
-            <Button
-              colorScheme="green"
-              onClick={handleAcceptTrade}
-              isDisabled={!canAcceptTrade()}
-            >
-              Accept
-            </Button>
-          </HStack>
-        </VStack>
-      </Box>
-    );
+  if (!player) { 
+      return <Box>Loading player data...</Box>;
   }
 
-  // For making trade offers
+  const resourceTypes = Object.keys(resourceInfo) as ResourceType[];
+
   return (
-    <Box p={4} bg="white" borderRadius="lg" boxShadow="md">
-      <VStack spacing={4} align="stretch">
-        <Text fontSize="xl" fontWeight="bold">Trading</Text>
-
+    <Box p={4} borderWidth="1px" borderRadius="lg">
+      <Heading size="md" mb={4}>Trading</Heading>
+      <VStack spacing={6} align="stretch">
+        {/* Bank Trading Section */}
         <Box>
-          <Text fontWeight="bold" mb={2}>Give:</Text>
-          <Grid templateColumns="repeat(5, 1fr)" gap={2}>
-            {(['brick', 'lumber', 'ore', 'grain', 'wool'] as ResourceType[]).map(type => (
-              <ResourceTrade
-                key={type}
-                type={type}
-                count={give[type] || 0}
-                onChange={(count) => setGive({ ...give, [type]: count })}
-              />
-            ))}
-          </Grid>
-        </Box>
-
-        <Box>
-          <Text fontWeight="bold" mb={2}>Want:</Text>
-          <Grid templateColumns="repeat(5, 1fr)" gap={2}>
-            {(['brick', 'lumber', 'ore', 'grain', 'wool'] as ResourceType[]).map(type => (
-              <ResourceTrade
-                key={type}
-                type={type}
-                count={want[type] || 0}
-                onChange={(count) => setWant({ ...want, [type]: count })}
-              />
-            ))}
-          </Grid>
-        </Box>
-
-        <Box>
-          <Text fontWeight="bold" mb={2}>Trade with:</Text>
-          <Select
-            placeholder="Select player"
-            value={targetPlayer?.toString() || ''}
-            onChange={(e) => setTargetPlayer(e.target.value ? parseInt(e.target.value) : null)}
+          <Heading size="sm" mb={2}>Trade with Bank</Heading>
+          <HStack spacing={2} mb={2}>
+            <Text>Give:</Text>
+            <Select value={bankGiveResource} onChange={(e) => setBankGiveResource(e.target.value as ResourceType)} size="sm">
+              {resourceTypes.map(res => <option key={res} value={res}>{res} ({calculateBankRatio(res)}:1)</option>)}
+            </Select>
+            <Text>Receive:</Text>
+            <Select value={bankReceiveResource} onChange={(e) => setBankReceiveResource(e.target.value as ResourceType)} size="sm">
+              {resourceTypes.map(res => <option key={res} value={res}>{res}</option>)}
+            </Select>
+          </HStack>
+          <Button 
+             onClick={handleBankTrade} 
+             isDisabled={!canTrade || bankGiveResource === bankReceiveResource || (player.resources[bankGiveResource] ?? 0) < currentBankRatio} 
+             size="sm" 
+             colorScheme="cyan"
           >
-            <option value="">All Players</option>
-            {players.map((player, index) => (
-              index !== currentPlayer && (
-                <option key={index} value={index}>
-                  {player.name}
-                </option>
-              )
-            ))}
-          </Select>
+            Trade {currentBankRatio} {bankGiveResource} for 1 {bankReceiveResource}
+          </Button>
         </Box>
 
-        <Button
-          colorScheme="blue"
-          onClick={handleOfferTrade}
-          isDisabled={!canOfferTrade()}
-        >
-          Offer Trade
-        </Button>
+        <Divider />
 
+        {/* Player Trading Section */}
         <Box>
-          <Text fontWeight="bold" mb={2}>Bank Trade (4:1):</Text>
-          <Grid templateColumns="repeat(5, 1fr)" gap={2}>
-            {(['brick', 'lumber', 'ore', 'grain', 'wool'] as ResourceType[]).map(giveType => (
-              <Box key={giveType}>
-                <Text textAlign="center" mb={1}>Give 4 {giveType}</Text>
-                <VStack spacing={1}>
-                  {(['brick', 'lumber', 'ore', 'grain', 'wool'] as ResourceType[])
-                    .filter(wantType => wantType !== giveType)
-                    .map(wantType => (
-                      <Button
-                        key={wantType}
-                        size="sm"
-                        colorScheme="green"
-                        onClick={() => handleBankTrade(giveType, wantType)}
-                        isDisabled={!canBankTrade()}
-                      >
-                        Get 1 {wantType}
-                      </Button>
+            <Heading size="sm" mb={2}>Offer Trade to Players</Heading>
+            <VStack align="stretch" spacing={1} mb={2}>
+                <Text fontSize="xs">You Offer:</Text>
+                 <Wrap spacing={2}>
+                    {resourceTypes.map(resource => (
+                        <WrapItem key="offer-"+resource>
+                             <HStack>
+                                 <Text minW="40px" fontSize="sm">{resource}:</Text>
+                                <NumberInput size="xs" maxW="60px" min={0} max={player.resources[resource] ?? 0} 
+                                     value={offerResources[resource] || 0} 
+                                     onChange={(_, valNum) => handleResourceChange("offer", resource, valNum)}>
+                                    <NumberInputField />
+                                    <NumberInputStepper>
+                                        <NumberIncrementStepper />
+                                        <NumberDecrementStepper />
+                                    </NumberInputStepper>
+                                </NumberInput>
+                            </HStack>
+                        </WrapItem>
                     ))}
-                </VStack>
-              </Box>
-            ))}
-          </Grid>
+                 </Wrap>
+            </VStack>
+             <VStack align="stretch" spacing={1} mb={2}>
+                <Text fontSize="xs">You Request:</Text>
+                <Wrap spacing={2}>
+                    {resourceTypes.map(resource => (
+                        <WrapItem key="request-"+resource>
+                             <HStack>
+                                 <Text minW="40px" fontSize="sm">{resource}:</Text>
+                                <NumberInput size="xs" maxW="60px" min={0} 
+                                    value={requestResources[resource] || 0}
+                                     onChange={(_, valNum) => handleResourceChange("request", resource, valNum)}>
+                                    <NumberInputField />
+                                    <NumberInputStepper>
+                                        <NumberIncrementStepper />
+                                        <NumberDecrementStepper />
+                                    </NumberInputStepper>
+                                </NumberInput>
+                            </HStack>
+                        </WrapItem>
+                    ))}
+                 </Wrap>
+            </VStack>
+            <Button onClick={handleOfferTrade} isDisabled={!canTrade || !!tradeOffer} size="sm" colorScheme="orange">
+                Offer Trade
+            </Button>
         </Box>
+
+        {/* Active Trade Offer Section */}
+        {tradeOffer && (
+          <Box p={3} borderWidth="1px" borderRadius="md" bg="yellow.50">
+            <Heading size="xs" mb={2}>Active Offer from {players[tradeOffer.playerId]?.name || "Unknown Player"}</Heading>
+            <VStack align="stretch" fontSize="sm">
+                <Text>Offering: {JSON.stringify(tradeOffer.offer)}</Text>
+                <Text>Requesting: {JSON.stringify(tradeOffer.request)}</Text>
+                {currentPlayer !== tradeOffer.playerId && (
+                    <HStack mt={2}>
+                        <Button onClick={handleAcceptTrade} isDisabled={!canTrade} size="xs" colorScheme="green">Accept</Button>
+                        <Button onClick={handleRejectTrade} isDisabled={!canTrade} size="xs" colorScheme="red">Reject</Button>
+                    </HStack>
+                )}
+                 {currentPlayer === tradeOffer.playerId && (
+                      <Text fontSize="xs" color="gray.600">(Waiting for others)</Text>
+                 )}
+            </VStack>
+          </Box>
+        )}
+
       </VStack>
     </Box>
   );
-}; 
+} 

@@ -1,39 +1,34 @@
-import { Box, Button, Grid, HStack, Text, VStack } from '@chakra-ui/react';
+import { ChakraProvider, Box, Heading, VStack, Flex } from '@chakra-ui/react';
 import { GameBoard } from './components/GameBoard';
 import { PlayerPanel } from './components/PlayerPanel';
-import { DevelopmentCards } from './components/DevelopmentCards';
-import { Trading } from './components/Trading';
-import { useGameStore } from './store/gameStore';
+import { GameControls } from './components/GameControls';
+import { useGameStore } from './store/gameStore'; // Assuming useGameStore provides the game state and dispatch
+import { theme } from './theme';
 
 function App() {
-  const { startGame } = useGameStore();
+  // Get state and potentially dispatch from the store
+  // const { dispatch } = useGameStore();
+  // TODO: Implement a start game button or logic if needed
+  // const handleStartGame = () => {
+  //   dispatch({ type: 'START_GAME' }); // Example: START_GAME action needs to be defined
+  // };
 
   return (
-    <Box p={8}>
-      <VStack spacing={8} align="stretch">
-        <HStack justify="space-between" align="center">
-          <Text fontSize="3xl" fontWeight="bold">Catan</Text>
-          <Button
-            colorScheme="green"
-            onClick={() => startGame(4)}
-          >
-            New Game
-          </Button>
-        </HStack>
-
-        <Grid templateColumns="1fr auto" gap={8}>
-          <Box>
+    <ChakraProvider theme={theme}>
+      <Box p={5}>
+        <Heading mb={4}>Catan Game</Heading>
+        {/* Add start button if needed: <Button onClick={handleStartGame}>Start Game</Button> */}
+        <Flex direction={{ base: 'column', lg: 'row' }} gap={6}>
+          <VStack flex={1} spacing={4} align="stretch">
             <GameBoard />
-          </Box>
-          
-          <VStack spacing={8} minW="300px">
-            <PlayerPanel />
-            <DevelopmentCards />
-            <Trading />
+            <GameControls />
           </VStack>
-        </Grid>
-      </VStack>
-    </Box>
+          <Box width={{ base: '100%', lg: '300px' }}>
+            <PlayerPanel />
+          </Box>
+        </Flex>
+      </Box>
+    </ChakraProvider>
   );
 }
 

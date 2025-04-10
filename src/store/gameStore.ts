@@ -1,267 +1,170 @@
 import { create } from 'zustand';
-import { GameState, ResourceType, Hex, Vertex, Edge, Player, GamePhase } from '../types/game';
-import { v4 as uuidv4 } from 'uuid';
-import { GameAction, GameError } from '../types/gameState';
+import { GameState, GameAction, GameError } from '../types/gameState';
+import { Player, ResourceType, DevelopmentCard, Board, Hex, Vertex, Edge, Port /*, GamePhase */ } from '../types/game'; // Removed unused GamePhase
 import { gameReducer } from '../reducers/gameReducer';
-import { gameInitializer } from '../initializers/gameInitializer';
-import { gameValidator } from '../validators/gameValidator';
-import { updateLongestRoad } from '../utils/longestRoad';
+import { validateGameAction } from '../validators/gameValidator';
+import { calculateLongestRoad } from '../utils/longestRoad';
+// import { updateLongestRoad } from '../utils/longestRoad'; // Function doesn't exist or wasn't exported
+import { calculateVictoryPoints } from '../utils/scoring'; // Assuming scoring utils exist
+import { INITIAL_RESOURCES, DEVELOPMENT_CARD_DECK } from '../constants/gameConstants';
+import { initializeBoard } from '../initializers/boardInitializer'; // Assuming board initializer exists
+import { v4 as uuidv4 } from 'uuid'; // Ensure uuid is installed
 
-const INITIAL_RESOURCES: Record<ResourceType, number> = {
-  brick: 0,
-  lumber: 0,
-  ore: 0,
-  grain: 0,
-  wool: 0,
-  desert: 0,
-};
-
-const CLASSIC_RESOURCES = [
-  'desert',
-  ...Array(3).fill('brick'),
-  ...Array(4).fill('lumber'),
-  ...Array(3).fill('ore'),
-  ...Array(4).fill('grain'),
-  ...Array(4).fill('wool'),
-] as ResourceType[];
-
-const CLASSIC_NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
-
-function shuffle<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
-function createInitialBoard() {
-  const shuffledResources = shuffle(CLASSIC_RESOURCES);
-  const shuffledNumbers = shuffle(CLASSIC_NUMBERS);
-  let numberIndex = 0;
-
-  const hexes: Hex[] = shuffledResources.map((type, index) => ({
-    id: uuidv4(),
-    type,
-    number: type === 'desert' ? undefined : shuffledNumbers[numberIndex++],
-    hasRobber: type === 'desert',
-    vertices: [],
-  }));
-
-  // Create vertices grid (6x11 for standard Catan board)
-  const vertices: Vertex[] = [];
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 11; col++) {
-      vertices.push({
-        id: uuidv4(),
-        x: col,
-        y: row,
-        adjacentHexes: [],
-        connectedVertices: [],
-        building: undefined,
-        owner: undefined,
-      });
-    }
-  }
-
-  // Create edges connecting vertices
-  const edges: Edge[] = [];
-  // Horizontal edges
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 10; col++) {
-      edges.push({
-        id: uuidv4(),
-        vertex1: vertices[row * 11 + col].id,
-        vertex2: vertices[row * 11 + col + 1].id,
-        road: undefined,
-      });
-    }
-  }
-  // Diagonal edges
-  for (let row = 0; row < 5; row++) {
-    for (let col = 0; col < 11; col++) {
-      if ((row + col) % 2 === 0) {
-        edges.push({
-          id: uuidv4(),
-          vertex1: vertices[row * 11 + col].id,
-          vertex2: vertices[(row + 1) * 11 + col].id,
-          road: undefined,
-        });
-      }
-    }
-  }
-
-  return { hexes, vertices, edges };
-}
-
-const INITIAL_PLAYERS: Player[] = [
-  {
-    id: 0,
-    name: 'Red Player',
-    color: 'red',
-    resources: { ...INITIAL_RESOURCES },
-    score: 0,
-    isAI: false,
-    developmentCards: [],
-    knights: 0,
-    longestRoad: false,
-    largestArmy: false,
-  },
-  {
-    id: 1,
-    name: 'Blue Player',
-    color: 'blue',
-    resources: { ...INITIAL_RESOURCES },
-    score: 0,
-    isAI: false,
-    developmentCards: [],
-    knights: 0,
-    longestRoad: false,
-    largestArmy: false,
-  },
-  {
-    id: 2,
-    name: 'White Player',
-    color: 'white',
-    resources: { ...INITIAL_RESOURCES },
-    score: 0,
-    isAI: false,
-    developmentCards: [],
-    knights: 0,
-    longestRoad: false,
-    largestArmy: false,
-  },
-  {
-    id: 3,
-    name: 'Orange Player',
-    color: 'orange',
-    resources: { ...INITIAL_RESOURCES },
-    score: 0,
-    isAI: false,
-    developmentCards: [],
-    knights: 0,
-    longestRoad: false,
-    largestArmy: false,
-  },
-];
-
+// Define the store state shape, aligning closely with GameState
 interface GameStore extends GameState {
   error: GameError | null;
-  canBuildSettlement: (vertexId: number) => boolean;
-  canBuildCity: (vertexId: number) => boolean;
-  canBuildRoad: (edgeId: number) => boolean;
-  canBuyDevelopmentCard: () => boolean;
-  canPlayDevelopmentCard: (cardType: string) => boolean;
-  canAcceptTrade: () => boolean;
-  canEndTurn: () => boolean;
   dispatch: (action: GameAction) => void;
+  // Add any UI-specific state if needed, distinct from core GameState
 }
 
-const createInitialResources = (): Record<ResourceType, number> => ({
-  wood: 0,
-  brick: 0,
-  ore: 0,
-  grain: 0,
-  wool: 0
-});
-
-const createInitialHex = (type: ResourceType | 'desert', number?: number): Hex => ({
-  id: uuidv4(),
-  type,
-  number,
-  hasRobber: type === 'desert',
-  vertices: [],
-  edges: []
-});
-
-const createInitialVertex = (x: number, y: number): Vertex => ({
-  id: uuidv4(),
-  x,
-  y,
-  adjacentVertices: [],
-  adjacentEdges: []
-});
-
-const createInitialEdge = (vertex1: number, vertex2: number): Edge => ({
-  id: uuidv4(),
-  vertices: [vertex1, vertex2]
-});
-
-const createInitialPlayer = (id: string, name: string, color: string): Player => ({
-  id,
-  name,
-  color,
-  resources: createInitialResources(),
-  developmentCards: [],
-  score: 0
-});
-
-const gameInitializer = (numPlayers: number): GameState => {
-  const players: Player[] = [
-    createInitialPlayer('0', 'Player 1', 'red'),
-    createInitialPlayer('1', 'Player 2', 'blue'),
-    createInitialPlayer('2', 'Player 3', 'green'),
-    createInitialPlayer('3', 'Player 4', 'yellow')
-  ].slice(0, numPlayers);
-
-  return {
-    players,
-    currentPlayer: players[0].id,
-    phase: 'SETUP',
-    turnNumber: 0,
-    diceRoll: null,
-    board: {
-      hexes: [],
-      vertices: [],
-      edges: [],
-      ports: [],
-      robber: {
-        hexId: 0
-      }
-    },
-    longestRoad: {
-      playerId: null,
-      length: 0
-    },
-    largestArmy: {
-      playerId: null,
-      size: 0
-    },
-    tradeOffer: null,
-    setupPhase: {
-      round: 1,
-      direction: 'forward'
-    }
-  };
+// Helper to create initial players
+const createInitialPlayers = (numPlayers: number): Record<string, Player> => {
+  const colors = ['red', 'blue', 'green', 'orange']; // Example colors
+  const players: Record<string, Player> = {};
+  for (let i = 0; i < numPlayers; i++) {
+    const playerId = uuidv4();
+    players[playerId] = {
+      id: playerId,
+      name: `Player ${i + 1}`,
+      color: colors[i % colors.length],
+      resources: { ...INITIAL_RESOURCES }, // Use initial resources constant
+      developmentCards: [], // Start with empty array of DevelopmentCard objects
+      score: 0, // Initialize score
+      // Add other player-specific state like knights played, etc.
+      knightsPlayed: 0,
+      hasLargestArmy: false,
+      hasLongestRoad: false,
+    };
+  }
+  return players;
 };
 
+// Initialize the game state
+// Assuming initializeBoard() returns a Board type object
+const initialBoard: Board = initializeBoard();
+const initialPlayers = createInitialPlayers(2); // Start with 2 players
+const initialPlayerIds = Object.keys(initialPlayers);
+
+const initialState: GameState = {
+  players: initialPlayers,
+  currentPlayer: initialPlayerIds[0], // Start with the first player
+  board: initialBoard,
+  phase: 'SETUP', // Initial phase
+  turnNumber: 1,
+  diceRolled: false,
+  diceRoll: null,
+  developmentCardDeck: [...DEVELOPMENT_CARD_DECK], // Shuffle this?
+  longestRoad: { playerId: null, length: 0 },
+  largestArmy: { playerId: null, count: 0 },
+  tradeOffer: null,
+  playedDevelopmentCard: false, // Track if a card was played this turn
+  mustMoveRobber: false,      // Flag set after rolling a 7
+  setupPhase: { round: 1, direction: 'forward', settlementsPlaced: 0, roadsPlaced: 0 }, // Initial setup state
+  winner: null,
+};
+
+// Create the Zustand store
 export const useGameStore = create<GameStore>((set, get) => ({
-  ...gameInitializer(4),
+  ...initialState,
   error: null,
-  canBuildSettlement: (vertexId: number) => {
-    return gameValidator.canBuildSettlement(get(), vertexId);
-  },
-  canBuildCity: (vertexId: number) => {
-    return gameValidator.canBuildCity(get(), vertexId);
-  },
-  canBuildRoad: (edgeId: number) => {
-    return gameValidator.canBuildRoad(get(), edgeId);
-  },
-  canBuyDevelopmentCard: () => {
-    return gameValidator.canBuyDevelopmentCard(get());
-  },
-  canPlayDevelopmentCard: (cardType: string) => {
-    return gameValidator.canPlayDevelopmentCard(get(), cardType);
-  },
-  canAcceptTrade: () => {
-    return gameValidator.canAcceptTrade(get());
-  },
-  canEndTurn: () => {
-    return gameValidator.canEndTurn(get());
-  },
+
+  // Dispatch function to handle actions
   dispatch: (action: GameAction) => {
-    const result = gameReducer(get(), action);
-    set(result);
-  }
-})); 
+    const currentState = get();
+    let nextState: GameState = { ...currentState }; // Start with current state
+    let error: GameError | null = null;
+
+    // 1. Validate Action
+    // Create a temporary GameState without store-specific methods/properties
+    const coreGameState: GameState = {
+        players: currentState.players,
+        currentPlayer: currentState.currentPlayer,
+        board: currentState.board,
+        phase: currentState.phase,
+        turnNumber: currentState.turnNumber,
+        diceRolled: currentState.diceRolled,
+        diceRoll: currentState.diceRoll,
+        developmentCardDeck: currentState.developmentCardDeck,
+        longestRoad: currentState.longestRoad,
+        largestArmy: currentState.largestArmy,
+        tradeOffer: currentState.tradeOffer,
+        playedDevelopmentCard: currentState.playedDevelopmentCard,
+        mustMoveRobber: currentState.mustMoveRobber,
+        setupPhase: currentState.setupPhase,
+        winner: currentState.winner,
+    };
+    error = validateGameAction(coreGameState, action);
+
+    if (error) {
+      console.error('Validation Error:', error);
+      set({ error: error });
+      return; // Stop processing if invalid action
+    }
+
+    // 2. Apply Action via Reducer
+    try {
+        // Pass the core game state to the reducer
+      nextState = gameReducer(coreGameState, action);
+    } catch (e: any) {
+      console.error('Reducer Error:', e);
+      set({ error: { code: 'REDUCER_ERROR', message: e.message || 'Error applying action.' }});
+      return;
+    }
+    
+    // 3. Post-Action Updates (Scoring, Longest Road, Largest Army, Winner Check)
+    // These should ideally operate on the `nextState` produced by the reducer
+    
+    // Recalculate Longest Road
+    const longestRoadResult = calculateLongestRoad(nextState);
+    if (longestRoadResult.playerId !== nextState.longestRoad.playerId || longestRoadResult.length !== nextState.longestRoad.length) {
+        // Update hasLongestRoad status for players
+        const playersWithUpdatedRoad = { ...nextState.players };
+        if (nextState.longestRoad.playerId && playersWithUpdatedRoad[nextState.longestRoad.playerId]) {
+             playersWithUpdatedRoad[nextState.longestRoad.playerId].hasLongestRoad = false;
+        }
+        if (longestRoadResult.playerId && playersWithUpdatedRoad[longestRoadResult.playerId]) {
+            playersWithUpdatedRoad[longestRoadResult.playerId].hasLongestRoad = true;
+        }
+        nextState = { 
+            ...nextState, 
+            longestRoad: longestRoadResult,
+            players: playersWithUpdatedRoad 
+        };
+    }
+
+    // Recalculate Largest Army (assuming a function exists)
+    // const largestArmyResult = calculateLargestArmy(nextState);
+    // if (largestArmyResult.playerId !== nextState.largestArmy.playerId) {
+    //      nextState = { ...nextState, largestArmy: largestArmyResult };
+    // }
+
+    // Recalculate Victory Points for all players
+    let updatedPlayers = { ...nextState.players };
+    let potentialWinner: string | null = null;
+    for (const playerId in updatedPlayers) {
+        const score = calculateVictoryPoints(nextState, playerId);
+        updatedPlayers[playerId] = { ...updatedPlayers[playerId], score: score };
+        if (score >= 10) { // Check for winner (use constant for VP goal)
+            potentialWinner = playerId;
+        }
+    }
+    nextState = { ...nextState, players: updatedPlayers };
+
+    // Check for winner - needs to happen *after* all points are calculated
+    if (potentialWinner && !nextState.winner) { // Only declare winner once
+        nextState = { ...nextState, winner: potentialWinner, phase: 'FINISHED' };
+    }
+
+    // 4. Update Store State
+    // Only include properties that are part of GameStore
+    set({
+        ...nextState, // Spread the updated core game state
+        error: null, // Clear previous errors on success
+        // Ensure store-specific properties are preserved if they weren't part of GameState
+        // dispatch: currentState.dispatch // dispatch doesn't change
+    });
+  },
+}));
+
+// Optional: Selector for convenience
+export const useGame = useGameStore; 

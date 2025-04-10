@@ -1,139 +1,71 @@
-import { GameState, GameInitializer } from '../types/gameLogic';
-import { ResourceType, Player, Hex, Vertex, Edge } from '../types/game';
-import { BOARD_LAYOUT, getHexVertices, getHexEdges, getNeighbors } from '../utils/boardLayout';
+import { GameState } from '../types/gameState';
+import { Player, ResourceType, DevelopmentCard, Board } from '../types/game';
 import { v4 as uuidv4 } from 'uuid';
+import { initializeBoard } from './boardInitializer';
+import { INITIAL_RESOURCES, DEVELOPMENT_CARD_DECK } from '../constants/gameConstants';
 
-const INITIAL_RESOURCES: Record<ResourceType, number> = {
-  brick: 0,
-  lumber: 0,
-  ore: 0,
-  grain: 0,
-  wool: 0
+// Helper to create initial players
+const createInitialPlayers = (numPlayers: number): Record<string, Player> => {
+  const colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown']; // Example colors
+  const players: Record<string, Player> = {};
+  for (let i = 0; i < numPlayers; i++) {
+    const playerId = uuidv4();
+    players[playerId] = {
+      id: playerId,
+      name: `Player ${i + 1}`,
+      color: colors[i % colors.length],
+      resources: { ...INITIAL_RESOURCES }, // Use initial resources constant correctly
+      developmentCards: [], // Initialize as empty array of DevelopmentCard
+      score: 0,
+      knightsPlayed: 0,
+      hasLargestArmy: false,
+      hasLongestRoad: false,
+      // Ensure all required Player properties from types/game.ts are initialized
+    };
+  }
+  return players;
 };
 
-const PLAYER_COLORS = ['red', 'blue', 'white', 'orange'];
+// Function to initialize the complete GameState
+export const initializeGame = (numPlayers: number = 2): GameState => {
+  const board: Board = initializeBoard(); // Get the initialized board
+  const players = createInitialPlayers(numPlayers);
+  const playerIds = Object.keys(players);
 
-const createInitialBoard = () => {
-  const hexes: Hex[] = BOARD_LAYOUT.map((layout, index) => ({
-    id: index,
-    type: layout.type,
-    number: layout.number || null,
-    hasRobber: layout.type === 'desert',
-    vertices: [],
-    edges: []
-  }));
-
-  // Create vertices and edges
-  const vertices: Vertex[] = [];
-  const edges: Edge[] = [];
-  let vertexId = 0;
-  let edgeId = 0;
-
-  // Create vertices for each hex
-  hexes.forEach(hex => {
-    const hexVertices = getHexVertices(hex.id, 0).map(coords => {
-      const vertex: Vertex = {
-        id: vertexId++,
-        building: null,
-        adjacentHexes: [hex.id],
-        adjacentVertices: [],
-        adjacentEdges: []
-      };
-      vertices.push(vertex);
-      return vertex.id;
-    });
-    hex.vertices = hexVertices;
-
-    // Create edges between vertices
-    for (let i = 0; i < 6; i++) {
-      const edge: Edge = {
-        id: edgeId++,
-        road: null,
-        vertices: [hexVertices[i], hexVertices[(i + 1) % 6]],
-        adjacentEdges: []
-      };
-      edges.push(edge);
-      hex.edges.push(edge.id);
-    }
-  });
-
-  // Connect adjacent vertices and edges
-  hexes.forEach(hex => {
-    const neighbors = getNeighbors(hex.id, 0);
-    neighbors.forEach((neighbor, i) => {
-      const neighborHex = hexes.find(h => h.id === neighbor[0]);
-      if (neighborHex) {
-        // Connect shared vertices
-        const sharedVertices = hex.vertices.filter(v => 
-          neighborHex.vertices.includes(v)
-        );
-        sharedVertices.forEach(v => {
-          const vertex = vertices.find(vert => vert.id === v);
-          if (vertex && !vertex.adjacentHexes.includes(neighborHex.id)) {
-            vertex.adjacentHexes.push(neighborHex.id);
-          }
-        });
-
-        // Connect shared edges
-        const sharedEdges = hex.edges.filter(e => 
-          neighborHex.edges.includes(e)
-        );
-        sharedEdges.forEach(e => {
-          const edge = edges.find(edg => edg.id === e);
-          if (edge) {
-            edge.adjacentEdges.push(...neighborHex.edges.filter(ne => 
-              ne !== e && edges.find(edg => edg.id === ne)?.vertices.some(v => 
-                edge.vertices.includes(v)
-              )
-            ));
-          }
-        });
-      }
-    });
-  });
-
-  return { hexes, vertices, edges };
-};
-
-export const gameInitializer: GameInitializer = (numPlayers: number): GameState => {
-  if (numPlayers < 2 || numPlayers > 4) {
-    throw new Error('Invalid number of players');
+  // Find the hex where the robber starts (first desert hex)
+  const initialRobberHexId = board.hexes.findIndex(hex => hex.type === 'desert');
+  if (initialRobberHexId === -1) {
+      console.warn('No desert hex found for initial robber placement!');
+      // Place robber on first hex as fallback
+      initialRobberHexId = 0; 
   }
 
-  const players: Player[] = Array(numPlayers).fill(null).map((_, i) => ({
-    id: i,
-    name: `Player ${i + 1}`,
-    color: PLAYER_COLORS[i],
-    resources: { ...INITIAL_RESOURCES },
-    developmentCards: [],
-    buildings: {
-      settlements: [],
-      cities: [],
-      roads: []
+  const initialState: GameState = {
+    players: players,
+    currentPlayer: playerIds[0], // First player starts
+    board: {
+        ...board, // Spread the initialized board
+        robber: { hexId: initialRobberHexId } // Set initial robber position
     },
-    knights: 0,
-    victoryPoints: 0
-  }));
-
-  return {
-    players,
-    currentPlayer: 0,
     phase: 'SETUP',
     turnNumber: 1,
+    diceRolled: false,
     diceRoll: null,
+    developmentCardDeck: [...DEVELOPMENT_CARD_DECK], // Use constant deck (consider shuffling)
+    longestRoad: { playerId: null, length: 0 },
+    largestArmy: { playerId: null, count: 0 },
+    tradeOffer: null,
+    playedDevelopmentCard: false,
+    mustMoveRobber: false,
     setupPhase: {
       round: 1,
-      direction: 'forward'
+      direction: 'forward',
+      settlementsPlaced: 0, 
+      roadsPlaced: 0,
+      // Removed settlementVertexId and roadEdgeId here, they belong to turn-specific state if needed
     },
-    board: createInitialBoard(),
-    longestRoad: {
-      player: null,
-      length: 0
-    },
-    largestArmy: {
-      player: null,
-      size: 0
-    },
-    tradeOffer: null
+    winner: null,
   };
+
+  return initialState;
 }; 

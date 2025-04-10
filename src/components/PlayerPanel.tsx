@@ -1,6 +1,7 @@
-import { Box, Grid, HStack, Text, VStack, Badge, Button } from '@chakra-ui/react';
+import { Box, Grid, HStack, Text, VStack, Badge, Button, Heading, Divider, Flex, Icon } from '@chakra-ui/react';
+import { FaLeaf, FaMountain, FaTree, FaWarehouse, FaSheep, FaStar, FaRoad, FaCity, FaUserFriends, FaChessKnight } from 'react-icons/fa';
 import { useGameStore } from '../store/gameStore';
-import { ResourceType } from '../types/game';
+import { ResourceType, Player } from '../types/game';
 
 const RESOURCE_COLORS = {
   brick: '#E57373',
@@ -26,14 +27,41 @@ const ResourceCard = ({ type, count }: { type: ResourceType; count: number }) =>
   </Box>
 );
 
-export const PlayerPanel = () => {
-  const { 
-    players, 
-    currentPlayer, 
-    phase, 
-    dispatch,
-    canEndTurn
-  } = useGameStore();
+// Map ResourceType to an icon and color
+const resourceInfo: Record<ResourceType, { icon: React.ElementType; color: string }> = {
+  wood: { icon: FaTree, color: 'green.500' },
+  brick: { icon: FaWarehouse, color: 'red.500' },
+  ore: { icon: FaMountain, color: 'gray.500' },
+  grain: { icon: FaLeaf, color: 'yellow.400' },
+  wool: { icon: FaSheep, color: 'gray.200' },
+};
+
+// Function to get player stats (example - adapt based on actual state structure)
+const getPlayerStats = (player: Player | undefined, state: GameState) => {
+   if (!player) return { settlements: 0, cities: 0, roads: 0, armySize: 0, vp: 0 };
+   
+   const settlements = Object.values(state.board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'settlement').length;
+   const cities = Object.values(state.board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'city').length;
+   const roads = Object.values(state.board.edges).filter(e => e.road?.playerId === player.id).length;
+   const armySize = player.knightsPlayed || 0;
+   const vp = player.score;
+   
+   return { settlements, cities, roads, armySize, vp };
+}
+
+export function PlayerPanel() {
+  const { players, currentPlayer, longestRoad, largestArmy, phase, turnNumber, setupPhase, winner, board } = useGameStore(state => ({ 
+      players: state.players, 
+      currentPlayer: state.currentPlayer,
+      longestRoad: state.longestRoad,
+      largestArmy: state.largestArmy,
+      phase: state.phase,
+      turnNumber: state.turnNumber,
+      setupPhase: state.setupPhase,
+      winner: state.winner,
+      board: state.board
+  }));
+  const playerIds = Object.keys(players);
 
   const handleRollDice = () => {
     dispatch({ type: 'ROLL_DICE' });
@@ -44,76 +72,48 @@ export const PlayerPanel = () => {
   };
 
   return (
-    <VStack spacing={4} align="stretch" w="300px" p={4} bg="gray.100" borderRadius="lg">
-      {players.map((player, index) => (
-        <Box
-          key={index}
-          p={4}
-          bg={index === currentPlayer ? 'white' : 'gray.50'}
-          borderRadius="md"
-          borderWidth={2}
-          borderColor={PLAYER_COLORS[index]}
-          boxShadow={index === currentPlayer ? 'lg' : 'sm'}
-        >
-          <HStack justify="space-between" mb={2}>
-            <Text fontWeight="bold" color={PLAYER_COLORS[index]}>
-              {player.name}
-            </Text>
-            <Badge colorScheme={index === currentPlayer ? 'green' : 'gray'}>
-              {index === currentPlayer ? 'Current Turn' : 'Waiting'}
-            </Badge>
-          </HStack>
+    <Box p={4} borderWidth="1px" borderRadius="lg" height="100%">
+      <Heading size="md" mb={4}>Players</Heading>
+      <VStack spacing={4} align="stretch">
+         <Text fontSize="sm">Turn: {turnNumber} - Phase: {phase} {setupPhase ? `(Setup Round ${setupPhase.round})`: ''}</Text>
+         {winner && <Text color="green.500" fontWeight="bold">Winner: {players[winner]?.name}</Text>}
+        {playerIds.map(playerId => {
+          const player = players[playerId];
+          const isCurrent = playerId === currentPlayer;
+          const stats = getPlayerStats(player, { board });
           
-          <Grid templateColumns="repeat(3, 1fr)" gap={2} mb={2}>
-            {Object.entries(player.resources).map(([type, count]) => (
-              <ResourceCard
-                key={type}
-                type={type as ResourceType}
-                count={count}
-              />
-            ))}
-          </Grid>
-
-          <VStack spacing={2} align="stretch">
-            <Text>Victory Points: {player.victoryPoints}</Text>
-            {player.knights > 0 && (
-              <Text>Knights Played: {player.knights}</Text>
-            )}
-            {player.buildings.roads.length > 0 && (
-              <Text>Roads Built: {player.buildings.roads.length}</Text>
-            )}
-            {player.buildings.settlements.length > 0 && (
-              <Text>Settlements: {player.buildings.settlements.length}</Text>
-            )}
-            {player.buildings.cities.length > 0 && (
-              <Text>Cities: {player.buildings.cities.length}</Text>
-            )}
-          </VStack>
-
-          {index === currentPlayer && (
-            <HStack mt={4} justify="flex-end">
-              {phase === 'ROLL' && (
-                <Button 
-                  size="sm" 
-                  colorScheme="blue" 
-                  onClick={handleRollDice}
-                >
-                  Roll Dice
-                </Button>
-              )}
-              {canEndTurn() && (
-                <Button 
-                  size="sm" 
-                  colorScheme="green" 
-                  onClick={handleEndTurn}
-                >
-                  End Turn
-                </Button>
-              )}
-            </HStack>
-          )}
-        </Box>
-      ))}
-    </VStack>
+          return (
+            <Box key={player.id} p={3} borderWidth="2px" borderColor={isCurrent ? player.color || 'blue.500' : 'gray.200'} borderRadius="md">
+              <Flex justify="space-between" align="center" mb={2}>
+                 <Heading size="sm" color={player.color || 'black'}>{player.name} {isCurrent ? '(Current)' : ''}</Heading>
+                 <Flex align="center">
+                    <Icon as={FaStar} mr={1} color="yellow.400" />
+                    <Text fontWeight="bold">{stats.vp}</Text>
+                 </Flex>
+              </Flex>
+              <Divider my={2} />
+              <Text fontSize="sm" mb={1}>Resources:</Text>
+              <Flex wrap="wrap" gap={2} mb={2}>
+                {(Object.keys(resourceInfo) as ResourceType[]).map(resource => (
+                  <Flex key={resource} align="center" p={1} bg="gray.50" borderRadius="sm">
+                     <Icon as={resourceInfo[resource].icon} color={resourceInfo[resource].color} mr={1}/> 
+                     <Text fontSize="xs">{player.resources[resource]}</Text>
+                  </Flex>
+                ))}
+              </Flex>
+              <Text fontSize="sm" mb={1}>Stats:</Text>
+               <Flex wrap="wrap" gap={2} fontSize="xs">
+                   <Flex align="center"><Icon as={FaRoad} mr={1} /> Roads: {stats.roads}</Flex>
+                   <Flex align="center"><Icon as={FaUserFriends} mr={1} /> Settl.: {stats.settlements}</Flex>
+                   <Flex align="center"><Icon as={FaCity} mr={1} /> Cities: {stats.cities}</Flex>
+                   <Flex align="center"><Icon as={FaChessKnight} mr={1} /> Army: {stats.armySize} {player.id === largestArmy.playerId ? '(Largest)' : ''}</Flex>
+                   {player.id === longestRoad.playerId && <Flex align="center"><Icon as={FaRoad} mr={1} color="orange.400"/> Longest Road</Flex>}
+               </Flex>
+               <Text fontSize="sm" mt={2}>Dev Cards: {player.developmentCards.length}</Text>
+            </Box>
+          );
+        })}
+      </VStack>
+    </Box>
   );
-}; 
+} 

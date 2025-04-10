@@ -1,16 +1,16 @@
 import { GameRules, BuildCost } from '../types/gameLogic';
-import { ResourceType } from '../types/game';
+import { ResourceType, DevelopmentCardType, DevelopmentCard } from '../types/game';
 
 export const RESOURCE_TYPES: ResourceType[] = ['wood', 'brick', 'ore', 'grain', 'wool'];
 
-export const BUILD_COSTS = {
+export const BUILD_COSTS: Record<string, Partial<Record<ResourceType, number>>> = {
   road: { wood: 1, brick: 1 },
   settlement: { wood: 1, brick: 1, wool: 1, grain: 1 },
   city: { ore: 3, grain: 2 },
   developmentCard: { ore: 1, wool: 1, grain: 1 }
 } as const;
 
-export const DEVELOPMENT_CARDS = {
+export const DEVELOPMENT_CARDS: Record<DevelopmentCardType, number> = {
   knights: 14,
   victoryPoints: 5,
   roadBuilding: 2,
@@ -44,28 +44,28 @@ export const VICTORY_POINTS = {
 
 export const DEFAULT_BUILD_COSTS: BuildCost = {
   road: {
-    lumber: 1,
+    wood: 1,
     brick: 1,
     grain: 0,
     wool: 0,
     ore: 0,
   },
   settlement: {
-    lumber: 1,
+    wood: 1,
     brick: 1,
     grain: 1,
     wool: 1,
     ore: 0,
   },
   city: {
-    lumber: 0,
+    wood: 0,
     brick: 0,
     grain: 2,
     wool: 0,
     ore: 3,
   },
   developmentCard: {
-    lumber: 0,
+    wood: 0,
     brick: 0,
     grain: 1,
     wool: 1,
@@ -78,7 +78,7 @@ export const DEFAULT_GAME_RULES: GameRules = {
   minPlayers: 3,
   pointsToWin: 10,
   initialResources: {
-    lumber: 0,
+    wood: 0,
     brick: 0,
     grain: 0,
     wool: 0,
@@ -88,20 +88,20 @@ export const DEFAULT_GAME_RULES: GameRules = {
   robberThreshold: 7,
   buildCosts: DEFAULT_BUILD_COSTS,
   developmentCards: {
-    knight: 14,
-    victoryPoint: 5,
+    knights: 14,
+    victoryPoints: 5,
     roadBuilding: 2,
     yearOfPlenty: 2,
     monopoly: 2,
   },
 };
 
-export const RESOURCE_DISTRIBUTION: Record<ResourceType, number> = {
-  lumber: 4,
+export const RESOURCE_DISTRIBUTION: Record<ResourceType | 'desert', number> = {
+  wood: 4,
   brick: 3,
+  ore: 3,
   grain: 4,
   wool: 4,
-  ore: 3,
   desert: 1,
 };
 
