@@ -11,8 +11,8 @@ export const BUILD_COSTS: Record<string, Partial<Record<ResourceType, number>>> 
 } as const;
 
 export const DEVELOPMENT_CARDS: Record<DevelopmentCardType, number> = {
-  knights: 14,
-  victoryPoints: 5,
+  knight: 14,
+  victoryPoint: 5,
   roadBuilding: 2,
   yearOfPlenty: 2,
   monopoly: 2
@@ -88,8 +88,8 @@ export const DEFAULT_GAME_RULES: GameRules = {
   robberThreshold: 7,
   buildCosts: DEFAULT_BUILD_COSTS,
   developmentCards: {
-    knights: 14,
-    victoryPoints: 5,
+    knight: 14,
+    victoryPoint: 5,
     roadBuilding: 2,
     yearOfPlenty: 2,
     monopoly: 2,
