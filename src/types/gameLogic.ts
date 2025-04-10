@@ -1,20 +1,31 @@
 import { GameState, GameAction, GameError } from './gameState';
 import { ResourceType, DevelopmentCardType } from './game';
 
+export interface BuildCost {
+  road: Record<ResourceType, number>;
+  settlement: Record<ResourceType, number>;
+  city: Record<ResourceType, number>;
+  developmentCard: Record<ResourceType, number>;
+}
+
 export interface GameRules {
   maxPlayers: number;
   minPlayers: number;
   pointsToWin: number;
-  initialResources: Partial<Record<ResourceType, number>>;
+  initialResources: Record<ResourceType, number>;
+  maxHandSize: number;
+  robberThreshold: number;
+  buildCosts: BuildCost;
+  developmentCards: {
+    knights: number;
+    victoryPoints: number;
+    roadBuilding: number;
+    yearOfPlenty: number;
+    monopoly: number;
+  };
   setupRules: {
     settlementsPerPlayer: number;
     roadsPerPlayer: number;
-  };
-  costs: {
-    road: Partial<Record<ResourceType, number>>;
-    settlement: Partial<Record<ResourceType, number>>;
-    city: Partial<Record<ResourceType, number>>;
-    developmentCard: Partial<Record<ResourceType, number>>;
   };
   bankTrade: {
     defaultRatio: number;
@@ -43,4 +54,27 @@ export interface GameReducer {
 
 export interface GameInitializer {
   (numPlayers: number): GameState;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+export interface ResourceTransaction {
+  give: Partial<Record<ResourceType, number>>;
+  receive: Partial<Record<ResourceType, number>>;
+}
+
+export interface DevelopmentCardEffect {
+  type: DevelopmentCardType;
+  effect: (playerId: number) => void;
+}
+
+export interface RobberEffect {
+  moveRobber: (hexId: number) => void;
+  stealResource: (fromPlayerId: number, toPlayerId: number) => void;
 } 

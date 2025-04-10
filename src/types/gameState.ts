@@ -1,44 +1,42 @@
-import { ResourceType, GamePhase, Player, Hex, Vertex, Edge } from './game';
+import { Player, Hex, Vertex, Edge, Port, ResourceType } from './game';
 
 export interface GameState {
   players: Player[];
-  currentPlayer: number;
-  phase: GamePhase;
+  currentPlayer: string;
+  phase: 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER';
   turnNumber: number;
   diceRoll: number | null;
-  setupPhase: {
-    round: 1 | 2;
-    direction: 'forward' | 'backward';
-  } | null;
   board: {
     hexes: Hex[];
     vertices: Vertex[];
     edges: Edge[];
+    ports: Port[];
+    robber: {
+      hexId: number;
+    };
   };
   longestRoad: {
-    player: number | null;
+    playerId: string | null;
     length: number;
   };
   largestArmy: {
-    player: number | null;
+    playerId: string | null;
     size: number;
   };
   tradeOffer: {
-    from: number;
-    to: number | null; // null means offer to all players
+    from: string;
+    to: string;
     give: Partial<Record<ResourceType, number>>;
     want: Partial<Record<ResourceType, number>>;
   } | null;
+  setupPhase: {
+    round: number;
+    direction: 'forward' | 'backward';
+  };
 }
 
 export interface GameError {
-  code: 
-    | 'INVALID_MOVE'
-    | 'NOT_YOUR_TURN'
-    | 'INVALID_PHASE'
-    | 'INSUFFICIENT_RESOURCES'
-    | 'INVALID_LOCATION'
-    | 'INVALID_TRADE';
+  code: 'INVALID_PHASE' | 'INVALID_PLAYER' | 'INSUFFICIENT_RESOURCES' | 'INVALID_LOCATION' | 'INVALID_TRADE';
   message: string;
 }
 
@@ -48,11 +46,10 @@ export type GameAction =
   | { type: 'BUILD_CITY'; vertexId: number }
   | { type: 'BUILD_ROAD'; edgeId: number }
   | { type: 'BUY_DEVELOPMENT_CARD' }
-  | { type: 'PLAY_DEVELOPMENT_CARD'; cardType: string }
-  | { type: 'MOVE_ROBBER'; hexId: number; targetPlayerId: number }
-  | { type: 'OFFER_TRADE'; give: Partial<Record<ResourceType, number>>; want: Partial<Record<ResourceType, number>>; toPlayer: number | null }
-  | { type: 'ACCEPT_TRADE' }
-  | { type: 'DECLINE_TRADE' }
-  | { type: 'BANK_TRADE'; give: ResourceType[]; want: ResourceType }
-  | { type: 'DISCARD_RESOURCES'; resources: Partial<Record<ResourceType, number>> }
+  | { type: 'PLAY_DEVELOPMENT_CARD'; cardIndex: number }
+  | { type: 'TRADE_BANK'; give: ResourceType; want: ResourceType }
+  | { type: 'TRADE_OFFER'; to: string; give: Partial<Record<ResourceType, number>>; want: Partial<Record<ResourceType, number>> }
+  | { type: 'TRADE_ACCEPT' }
+  | { type: 'TRADE_REJECT' }
+  | { type: 'MOVE_ROBBER'; hexId: number; targetPlayerId: string }
   | { type: 'END_TURN' }; 

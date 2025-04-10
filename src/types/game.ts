@@ -1,37 +1,34 @@
 export type ResourceType = 'wood' | 'brick' | 'ore' | 'grain' | 'wool';
 export type DevelopmentCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly';
 
-export type GamePhase = 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER' | 'DISCARD' | 'TRADE';
+export type GamePhase = 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER';
 
 export interface Player {
-  id: number;
+  id: string;
   name: string;
   color: string;
   resources: Record<ResourceType, number>;
-  developmentCards: DevelopmentCardType[];
-  buildings: {
-    settlements: number[];
-    cities: number[];
-    roads: number[];
-  };
+  developmentCards: DevelopmentCard[];
   knights: number;
   victoryPoints: number;
+  longestRoadLength: number;
 }
 
 export interface Hex {
   id: number;
   type: ResourceType | 'desert';
-  number: number | null;
-  hasRobber: boolean;
+  token?: number;
   vertices: number[];
   edges: number[];
 }
 
 export interface Vertex {
   id: number;
-  building: {
-    type: 'settlement' | 'city' | null;
-    player: number | null;
+  x: number;
+  y: number;
+  building?: {
+    type: 'settlement' | 'city';
+    playerId: string;
   };
   adjacentHexes: number[];
   adjacentVertices: number[];
@@ -40,16 +37,15 @@ export interface Vertex {
 
 export interface Edge {
   id: number;
-  road: {
-    player: number | null;
-  };
   vertices: [number, number];
-  adjacentEdges: number[];
+  road?: {
+    playerId: string;
+  };
 }
 
 export interface DevelopmentCard {
   type: DevelopmentCardType;
-  turnPurchased: number;
+  used: boolean;
 }
 
 export interface GameState {
@@ -73,4 +69,19 @@ export interface Trade {
   to: number | 'bank';
   give: Partial<Record<ResourceType, number>>;
   want: Partial<Record<ResourceType, number>>;
+}
+
+export interface Building {
+  type: 'settlement' | 'city';
+  player: number;
+}
+
+export interface Road {
+  player: number;
+}
+
+export interface Port {
+  type: ResourceType | 'any';
+  ratio: number;
+  vertices: [number, number];
 } 
