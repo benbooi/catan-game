@@ -2,294 +2,189 @@ import { GameState, GameAction, GameError } from '../types/gameState';
 import { ResourceType, DevelopmentCardType } from '../types/game';
 import { gameValidator } from '../validators/gameValidator';
 
-export function gameReducer(state: GameState, action: GameAction): GameState | GameError {
+export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'ROLL_DICE': {
       if (!gameValidator.canRollDice(state)) {
-        return { code: 'INVALID_PHASE', message: 'Cannot roll dice in current phase' };
+        return { ...state, error: { code: 'INVALID_PHASE', message: 'Cannot roll dice at this time' } };
       }
-
-      const die1 = Math.floor(Math.random() * 6) + 1;
-      const die2 = Math.floor(Math.random() * 6) + 1;
-      const total = die1 + die2;
-
-      let newState = { ...state, diceRoll: total };
-
-      if (total === 7) {
-        return {
-          ...newState,
-          phase: 'ROBBER'
-        };
-      }
-
-      // Distribute resources
-      const newPlayers = [...state.players];
-      state.board.hexes.forEach(hex => {
-        if (hex.number === total && !hex.hasRobber) {
-          hex.vertices.forEach(vertexId => {
-            const vertex = state.board.vertices.find(v => v.id === vertexId);
-            if (vertex?.building) {
-              const resourceCount = vertex.building.type === 'city' ? 2 : 1;
-              const player = newPlayers[vertex.building.player];
-              player.resources[hex.type] += resourceCount;
-            }
-          });
-        }
-      });
-
-      return {
-        ...newState,
-        players: newPlayers,
-        phase: 'MAIN'
-      };
+      const roll = Math.floor(Math.random() * 6) + Math.floor(Math.random() * 6) + 2;
+      return { ...state, diceRoll: roll, phase: 'MAIN' };
     }
 
     case 'BUILD_SETTLEMENT': {
       if (!gameValidator.canBuildSettlement(state, action.vertexId)) {
-        return { code: 'INVALID_MOVE', message: 'Cannot build settlement at this location' };
+        return { ...state, error: { code: 'INVALID_LOCATION', message: 'Cannot build settlement at this location' } };
       }
-
       const newPlayers = [...state.players];
-      const player = newPlayers[state.currentPlayer];
-      const newVertices = state.board.vertices.map(v => 
-        v.id === action.vertexId 
-          ? { ...v, building: { type: 'settlement', player: state.currentPlayer } }
-          : v
-      );
-
-      // Deduct resources if not in setup phase
-      if (!state.setupPhase) {
-        player.resources.brick--;
-        player.resources.lumber--;
-        player.resources.wool--;
-        player.resources.grain--;
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
       }
-
-      player.buildings.settlements.push(action.vertexId);
-      player.victoryPoints++;
-
-      return {
-        ...state,
-        players: newPlayers,
-        board: {
-          ...state.board,
-          vertices: newVertices
-        }
-      };
+      player.resources.wood--;
+      player.resources.brick--;
+      player.resources.grain--;
+      player.resources.wool--;
+      return { ...state, players: newPlayers };
     }
 
     case 'BUILD_CITY': {
       if (!gameValidator.canBuildCity(state, action.vertexId)) {
-        return { code: 'INVALID_MOVE', message: 'Cannot build city at this location' };
+        return { ...state, error: { code: 'INVALID_LOCATION', message: 'Cannot build city at this location' } };
       }
-
       const newPlayers = [...state.players];
-      const player = newPlayers[state.currentPlayer];
-      const newVertices = state.board.vertices.map(v => 
-        v.id === action.vertexId 
-          ? { ...v, building: { type: 'city', player: state.currentPlayer } }
-          : v
-      );
-
-      // Deduct resources
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
+      }
       player.resources.ore -= 3;
       player.resources.grain -= 2;
-
-      // Update buildings and points
-      player.buildings.settlements = player.buildings.settlements.filter(id => id !== action.vertexId);
-      player.buildings.cities.push(action.vertexId);
-      player.victoryPoints++;
-
-      return {
-        ...state,
-        players: newPlayers,
-        board: {
-          ...state.board,
-          vertices: newVertices
-        }
-      };
+      return { ...state, players: newPlayers };
     }
 
     case 'BUILD_ROAD': {
       if (!gameValidator.canBuildRoad(state, action.edgeId)) {
-        return { code: 'INVALID_MOVE', message: 'Cannot build road at this location' };
+        return { ...state, error: { code: 'INVALID_LOCATION', message: 'Cannot build road at this location' } };
       }
-
       const newPlayers = [...state.players];
-      const player = newPlayers[state.currentPlayer];
-      const newEdges = state.board.edges.map(e => 
-        e.id === action.edgeId 
-          ? { ...e, road: { player: state.currentPlayer } }
-          : e
-      );
-
-      // Deduct resources if not in setup phase
-      if (!state.setupPhase) {
-        player.resources.brick--;
-        player.resources.lumber--;
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
       }
-
-      player.buildings.roads.push(action.edgeId);
-
-      // Check for longest road
-      // TODO: Implement longest road calculation
-
-      return {
-        ...state,
-        players: newPlayers,
-        board: {
-          ...state.board,
-          edges: newEdges
-        }
-      };
+      player.resources.wood--;
+      player.resources.brick--;
+      return { ...state, players: newPlayers };
     }
 
-    case 'MOVE_ROBBER': {
-      if (!gameValidator.canMoveRobber(state, action.hexId, action.targetPlayerId)) {
-        return { code: 'INVALID_MOVE', message: 'Cannot move robber to this location' };
+    case 'BUY_DEVELOPMENT_CARD': {
+      if (!gameValidator.canBuyDevelopmentCard(state)) {
+        return { ...state, error: { code: 'INSUFFICIENT_RESOURCES', message: 'Cannot buy development card' } };
       }
-
-      const newHexes = state.board.hexes.map(h => ({
-        ...h,
-        hasRobber: h.id === action.hexId
-      }));
-
-      // Steal a random resource
       const newPlayers = [...state.players];
-      const targetPlayer = newPlayers[action.targetPlayerId];
-      const currentPlayer = newPlayers[state.currentPlayer];
-      
-      const targetResources = Object.entries(targetPlayer.resources)
-        .filter(([_, count]) => count > 0)
-        .map(([type]) => type as ResourceType);
-
-      if (targetResources.length > 0) {
-        const stolenResource = targetResources[Math.floor(Math.random() * targetResources.length)];
-        targetPlayer.resources[stolenResource]--;
-        currentPlayer.resources[stolenResource]++;
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
       }
-
-      return {
-        ...state,
-        players: newPlayers,
-        board: {
-          ...state.board,
-          hexes: newHexes
-        },
-        phase: 'MAIN'
-      };
+      player.resources.ore--;
+      player.resources.grain--;
+      player.resources.wool--;
+      return { ...state, players: newPlayers };
     }
 
-    case 'OFFER_TRADE': {
+    case 'PLAY_DEVELOPMENT_CARD': {
+      if (!gameValidator.canPlayDevelopmentCard(state, action.cardIndex.toString())) {
+        return { ...state, error: { code: 'INVALID_PHASE', message: 'Cannot play development card at this time' } };
+      }
+      const newPlayers = [...state.players];
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
+      }
+      player.developmentCards[action.cardIndex].used = true;
+      return { ...state, players: newPlayers };
+    }
+
+    case 'TRADE_BANK': {
+      if (!gameValidator.canBankTrade(state, action.give, action.want)) {
+        return { ...state, error: { code: 'INVALID_TRADE', message: 'Cannot trade with bank' } };
+      }
+      const newPlayers = [...state.players];
+      const player = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!player) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
+      }
+      player.resources[action.give]--;
+      player.resources[action.want]++;
+      return { ...state, players: newPlayers };
+    }
+
+    case 'TRADE_OFFER': {
       if (!gameValidator.canOfferTrade(state, action.give, action.want)) {
-        return { code: 'INVALID_TRADE', message: 'Invalid trade offer' };
+        return { ...state, error: { code: 'INVALID_TRADE', message: 'Cannot offer trade' } };
       }
-
       return {
         ...state,
         tradeOffer: {
           from: state.currentPlayer,
-          to: action.toPlayer,
+          to: action.to,
           give: action.give,
           want: action.want
         }
       };
     }
 
-    case 'ACCEPT_TRADE': {
+    case 'TRADE_ACCEPT': {
       if (!gameValidator.canAcceptTrade(state)) {
-        return { code: 'INVALID_TRADE', message: 'Cannot accept trade' };
+        return { ...state, error: { code: 'INVALID_TRADE', message: 'Cannot accept trade' } };
       }
-
-      const { tradeOffer } = state;
-      if (!tradeOffer) {
-        return { code: 'INVALID_TRADE', message: 'No trade offer exists' };
-      }
-
       const newPlayers = [...state.players];
-      const fromPlayer = newPlayers[tradeOffer.from];
-      const toPlayer = newPlayers[state.currentPlayer];
-
-      // Exchange resources
-      Object.entries(tradeOffer.give).forEach(([type, count]) => {
-        fromPlayer.resources[type as ResourceType] -= count || 0;
-        toPlayer.resources[type as ResourceType] += count || 0;
+      const tradeOffer = state.tradeOffer;
+      if (!tradeOffer) {
+        return { ...state, error: { code: 'INVALID_TRADE', message: 'No active trade offer' } };
+      }
+      const fromPlayer = newPlayers.find(p => p.id === tradeOffer.from);
+      const toPlayer = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!fromPlayer || !toPlayer) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
+      }
+      Object.entries(tradeOffer.give).forEach(([resource, count]) => {
+        fromPlayer.resources[resource as ResourceType] -= count;
+        toPlayer.resources[resource as ResourceType] += count;
       });
-
-      Object.entries(tradeOffer.want).forEach(([type, count]) => {
-        toPlayer.resources[type as ResourceType] -= count || 0;
-        fromPlayer.resources[type as ResourceType] += count || 0;
+      Object.entries(tradeOffer.want).forEach(([resource, count]) => {
+        fromPlayer.resources[resource as ResourceType] += count;
+        toPlayer.resources[resource as ResourceType] -= count;
       });
+      return { ...state, players: newPlayers, tradeOffer: null };
+    }
 
+    case 'TRADE_REJECT': {
+      return { ...state, tradeOffer: null };
+    }
+
+    case 'MOVE_ROBBER': {
+      if (!gameValidator.canMoveRobber(state, action.hexId, action.targetPlayerId)) {
+        return { ...state, error: { code: 'INVALID_LOCATION', message: 'Cannot move robber to this location' } };
+      }
+      const newPlayers = [...state.players];
+      const targetPlayer = newPlayers.find(p => p.id === action.targetPlayerId);
+      const currentPlayer = newPlayers.find(p => p.id === state.currentPlayer);
+      if (!targetPlayer || !currentPlayer) {
+        return { ...state, error: { code: 'INVALID_PLAYER', message: 'Player not found' } };
+      }
+      const resources = Object.entries(targetPlayer.resources)
+        .filter(([_, count]) => count > 0)
+        .map(([resource]) => resource as ResourceType);
+      if (resources.length > 0) {
+        const stolenResource = resources[Math.floor(Math.random() * resources.length)];
+        targetPlayer.resources[stolenResource]--;
+        currentPlayer.resources[stolenResource]++;
+      }
       return {
         ...state,
         players: newPlayers,
-        tradeOffer: null
-      };
-    }
-
-    case 'DECLINE_TRADE': {
-      return {
-        ...state,
-        tradeOffer: null
-      };
-    }
-
-    case 'BANK_TRADE': {
-      if (!gameValidator.canBankTrade(state, action.give, action.want)) {
-        return { code: 'INVALID_TRADE', message: 'Invalid bank trade' };
-      }
-
-      const newPlayers = [...state.players];
-      const player = newPlayers[state.currentPlayer];
-
-      // Execute bank trade
-      player.resources[action.give[0]] -= action.give.length;
-      player.resources[action.want]++;
-
-      return {
-        ...state,
-        players: newPlayers
+        board: {
+          ...state.board,
+          robber: { hexId: action.hexId }
+        }
       };
     }
 
     case 'END_TURN': {
       if (!gameValidator.canEndTurn(state)) {
-        return { code: 'INVALID_PHASE', message: 'Cannot end turn in current phase' };
+        return { ...state, error: { code: 'INVALID_PHASE', message: 'Cannot end turn at this time' } };
       }
-
-      let nextPlayer = state.currentPlayer;
-      let nextPhase = 'ROLL' as const;
-      let setupPhase = state.setupPhase;
-
-      if (state.setupPhase) {
-        if (state.setupPhase.direction === 'forward') {
-          nextPlayer = (state.currentPlayer + 1) % state.players.length;
-          if (nextPlayer === 0) {
-            setupPhase = { round: 2, direction: 'backward' };
-          }
-        } else {
-          nextPlayer = (state.currentPlayer - 1 + state.players.length) % state.players.length;
-          if (nextPlayer === state.players.length - 1) {
-            setupPhase = null;
-            nextPhase = 'ROLL';
-          }
-        }
-      } else {
-        nextPlayer = (state.currentPlayer + 1) % state.players.length;
-      }
-
+      const currentPlayerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+      const nextPlayerIndex = (currentPlayerIndex + 1) % state.players.length;
       return {
         ...state,
-        currentPlayer: nextPlayer,
-        phase: nextPhase,
-        setupPhase,
-        turnNumber: state.turnNumber + 1,
+        currentPlayer: state.players[nextPlayerIndex].id,
+        phase: 'ROLL',
         diceRoll: null
       };
     }
 
     default:
-      return { code: 'INVALID_MOVE', message: 'Invalid action type' };
+      return { ...state, error: { code: 'INVALID_PHASE', message: 'Invalid action type' } };
   }
 } 

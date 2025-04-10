@@ -9,15 +9,14 @@ export interface Player {
   color: string;
   resources: Record<ResourceType, number>;
   developmentCards: DevelopmentCard[];
-  knights: number;
-  victoryPoints: number;
-  longestRoadLength: number;
+  score: number;
 }
 
 export interface Hex {
   id: number;
   type: ResourceType | 'desert';
-  token?: number;
+  number?: number;
+  hasRobber: boolean;
   vertices: number[];
   edges: number[];
 }
@@ -26,13 +25,12 @@ export interface Vertex {
   id: number;
   x: number;
   y: number;
+  adjacentVertices: number[];
+  adjacentEdges: number[];
   building?: {
     type: 'settlement' | 'city';
     playerId: string;
   };
-  adjacentHexes: number[];
-  adjacentVertices: number[];
-  adjacentEdges: number[];
 }
 
 export interface Edge {
@@ -44,7 +42,7 @@ export interface Edge {
 }
 
 export interface DevelopmentCard {
-  type: DevelopmentCardType;
+  type: 'knight' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly' | 'victoryPoint';
   used: boolean;
 }
 

@@ -147,110 +147,121 @@ const INITIAL_PLAYERS: Player[] = [
 ];
 
 interface GameStore extends GameState {
-  // Actions
-  startGame: (numPlayers: number) => void;
-  dispatch: (action: GameAction) => void;
-  
-  // Computed properties
+  error: GameError | null;
   canBuildSettlement: (vertexId: number) => boolean;
   canBuildCity: (vertexId: number) => boolean;
   canBuildRoad: (edgeId: number) => boolean;
   canBuyDevelopmentCard: () => boolean;
   canPlayDevelopmentCard: (cardType: string) => boolean;
-  canOfferTrade: () => boolean;
   canAcceptTrade: () => boolean;
-  canBankTrade: () => boolean;
   canEndTurn: () => boolean;
+  dispatch: (action: GameAction) => void;
 }
 
+const createInitialResources = (): Record<ResourceType, number> => ({
+  wood: 0,
+  brick: 0,
+  ore: 0,
+  grain: 0,
+  wool: 0
+});
+
+const createInitialHex = (type: ResourceType | 'desert', number?: number): Hex => ({
+  id: uuidv4(),
+  type,
+  number,
+  hasRobber: type === 'desert',
+  vertices: [],
+  edges: []
+});
+
+const createInitialVertex = (x: number, y: number): Vertex => ({
+  id: uuidv4(),
+  x,
+  y,
+  adjacentVertices: [],
+  adjacentEdges: []
+});
+
+const createInitialEdge = (vertex1: number, vertex2: number): Edge => ({
+  id: uuidv4(),
+  vertices: [vertex1, vertex2]
+});
+
+const createInitialPlayer = (id: string, name: string, color: string): Player => ({
+  id,
+  name,
+  color,
+  resources: createInitialResources(),
+  developmentCards: [],
+  score: 0
+});
+
+const gameInitializer = (numPlayers: number): GameState => {
+  const players: Player[] = [
+    createInitialPlayer('0', 'Player 1', 'red'),
+    createInitialPlayer('1', 'Player 2', 'blue'),
+    createInitialPlayer('2', 'Player 3', 'green'),
+    createInitialPlayer('3', 'Player 4', 'yellow')
+  ].slice(0, numPlayers);
+
+  return {
+    players,
+    currentPlayer: players[0].id,
+    phase: 'SETUP',
+    turnNumber: 0,
+    diceRoll: null,
+    board: {
+      hexes: [],
+      vertices: [],
+      edges: [],
+      ports: [],
+      robber: {
+        hexId: 0
+      }
+    },
+    longestRoad: {
+      playerId: null,
+      length: 0
+    },
+    largestArmy: {
+      playerId: null,
+      size: 0
+    },
+    tradeOffer: null,
+    setupPhase: {
+      round: 1,
+      direction: 'forward'
+    }
+  };
+};
+
 export const useGameStore = create<GameStore>((set, get) => ({
-  ...gameInitializer(4), // Initialize with 4 players by default
-
-  players: INITIAL_PLAYERS,
-  currentPlayer: 0,
-  board: createInitialBoard(),
-  dice: {
-    lastRoll: null,
+  ...gameInitializer(4),
+  error: null,
+  canBuildSettlement: (vertexId: number) => {
+    return gameValidator.canBuildSettlement(get(), vertexId);
   },
-  phase: 'setup',
-  gameLog: ['Game initialized. Place your first settlement and road.'],
-  diceRoll: null,
-  vertices: {},
-  edges: {},
-  robberPosition: { q: 0, r: 0 },
-
-  startGame: (numPlayers: number) => {
-    set(gameInitializer(numPlayers));
+  canBuildCity: (vertexId: number) => {
+    return gameValidator.canBuildCity(get(), vertexId);
   },
-
+  canBuildRoad: (edgeId: number) => {
+    return gameValidator.canBuildRoad(get(), edgeId);
+  },
+  canBuyDevelopmentCard: () => {
+    return gameValidator.canBuyDevelopmentCard(get());
+  },
+  canPlayDevelopmentCard: (cardType: string) => {
+    return gameValidator.canPlayDevelopmentCard(get(), cardType);
+  },
+  canAcceptTrade: () => {
+    return gameValidator.canAcceptTrade(get());
+  },
+  canEndTurn: () => {
+    return gameValidator.canEndTurn(get());
+  },
   dispatch: (action: GameAction) => {
     const result = gameReducer(get(), action);
-    if ('code' in result) {
-      console.error(result.message);
-      return;
-    }
     set(result);
-
-    // Check for longest road updates after certain actions
-    if (
-      action.type === 'BUILD_ROAD' ||
-      action.type === 'BUILD_SETTLEMENT' ||
-      action.type === 'BUILD_CITY'
-    ) {
-      const state = get();
-      const newLongestRoad = updateLongestRoad(
-        state.board.edges,
-        state.board.vertices,
-        state.players.map(p => p.id)
-      );
-
-      // Only update if there's a change
-      if (
-        newLongestRoad.player !== state.longestRoad.player ||
-        newLongestRoad.length !== state.longestRoad.length
-      ) {
-        // Remove points from previous holder
-        if (state.longestRoad.player !== null) {
-          const prevPlayer = state.players[state.longestRoad.player];
-          prevPlayer.victoryPoints -= 2;
-        }
-
-        // Add points to new holder
-        if (newLongestRoad.player !== null) {
-          const newPlayer = state.players[newLongestRoad.player];
-          newPlayer.victoryPoints += 2;
-        }
-
-        set({ longestRoad: newLongestRoad });
-      }
-    }
-  },
-
-  // Computed properties using validator
-  canBuildSettlement: (vertexId: number) => 
-    gameValidator.canBuildSettlement(get(), vertexId),
-
-  canBuildCity: (vertexId: number) => 
-    gameValidator.canBuildCity(get(), vertexId),
-
-  canBuildRoad: (edgeId: number) => 
-    gameValidator.canBuildRoad(get(), edgeId),
-
-  canBuyDevelopmentCard: () => 
-    gameValidator.canBuyDevelopmentCard(get()),
-
-  canPlayDevelopmentCard: (cardType: string) => 
-    gameValidator.canPlayDevelopmentCard(get(), cardType),
-
-  canOfferTrade: () => 
-    get().phase === 'MAIN' && get().currentPlayer === get().players.findIndex(p => p.id === get().currentPlayer),
-
-  canAcceptTrade: () => 
-    gameValidator.canAcceptTrade(get()),
-
-  canBankTrade: () => 
-    get().phase === 'MAIN',
-
-  canEndTurn: () => 
-    gameValidator.canEndTurn(get())
+  }
 })); 

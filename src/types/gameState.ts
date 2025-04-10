@@ -1,9 +1,9 @@
-import { Player, Hex, Vertex, Edge, Port, ResourceType } from './game';
+import { Player, Hex, Vertex, Edge, Port, ResourceType, GamePhase } from './game';
 
 export interface GameState {
   players: Player[];
   currentPlayer: string;
-  phase: 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER';
+  phase: GamePhase;
   turnNumber: number;
   diceRoll: number | null;
   board: {
