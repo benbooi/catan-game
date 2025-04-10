@@ -2,6 +2,7 @@ import { Box, Grid, HStack, Text, VStack, Badge, Button, Heading, Divider, Flex,
 import { FaLeaf, FaMountain, FaTree, FaWarehouse, FaSheep, FaStar, FaRoad, FaCity, FaUserFriends, FaChessKnight } from 'react-icons/fa';
 import { useGameStore } from '../store/gameStore';
 import { ResourceType, Player } from '../types/game';
+import { GameState } from '../types/gameState';
 
 const RESOURCE_COLORS = {
   brick: '#E57373',
@@ -37,12 +38,12 @@ const resourceInfo: Record<ResourceType, { icon: React.ElementType; color: strin
 };
 
 // Function to get player stats (example - adapt based on actual state structure)
-const getPlayerStats = (player: Player | undefined, state: GameState) => {
+const getPlayerStats = (player: Player | undefined, board: GameState['board']) => {
    if (!player) return { settlements: 0, cities: 0, roads: 0, armySize: 0, vp: 0 };
    
-   const settlements = Object.values(state.board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'settlement').length;
-   const cities = Object.values(state.board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'city').length;
-   const roads = Object.values(state.board.edges).filter(e => e.road?.playerId === player.id).length;
+   const settlements = Object.values(board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'settlement').length;
+   const cities = Object.values(board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'city').length;
+   const roads = Object.values(board.edges).filter(e => e.road?.playerId === player.id).length;
    const armySize = player.knightsPlayed || 0;
    const vp = player.score;
    
@@ -61,7 +62,9 @@ export function PlayerPanel() {
       winner: state.winner,
       board: state.board
   }));
-  const playerIds = Object.keys(players);
+  
+  const dispatch = useGameStore(state => state.dispatch);
+  const playerIds = players.map(p => p.id);
 
   const handleRollDice = () => {
     dispatch({ type: 'ROLL_DICE' });
@@ -76,11 +79,10 @@ export function PlayerPanel() {
       <Heading size="md" mb={4}>Players</Heading>
       <VStack spacing={4} align="stretch">
          <Text fontSize="sm">Turn: {turnNumber} - Phase: {phase} {setupPhase ? `(Setup Round ${setupPhase.round})`: ''}</Text>
-         {winner && <Text color="green.500" fontWeight="bold">Winner: {players[winner]?.name}</Text>}
-        {playerIds.map(playerId => {
-          const player = players[playerId];
-          const isCurrent = playerId === currentPlayer;
-          const stats = getPlayerStats(player, { board });
+         {winner && <Text color="green.500" fontWeight="bold">Winner: {players.find(p => p.id === winner)?.name}</Text>}
+        {players.map(player => {
+          const isCurrent = player.id === currentPlayer;
+          const stats = getPlayerStats(player, board);
           
           return (
             <Box key={player.id} p={3} borderWidth="2px" borderColor={isCurrent ? player.color || 'blue.500' : 'gray.200'} borderRadius="md">
