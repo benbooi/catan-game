@@ -1,94 +1,71 @@
-import { Edge, Vertex } from '../types/game';
+import { GameState } from '../types/gameState';
 
 interface RoadNetwork {
-  visited: Set<number>;
+  edges: number[];
   length: number;
 }
 
-function findLongestPath(
-  startEdge: Edge,
-  edges: Edge[],
-  vertices: Vertex[],
-  playerId: number,
-  visited: Set<number> = new Set(),
-  depth: number = 0
-): number {
-  if (depth > 30) return 0; // Prevent infinite recursion
-  if (visited.has(startEdge.id)) return 0;
-  if (!startEdge.road || startEdge.road.player !== playerId) return 0;
-
-  visited.add(startEdge.id);
-  let maxLength = 1;
-
-  // Get connected edges through vertices
-  const connectedEdges = startEdge.vertices.flatMap(vertexId => {
-    const vertex = vertices.find(v => v.id === vertexId);
-    if (!vertex) return [];
-    
-    // If there's an opponent's settlement/city, road path is blocked
-    if (vertex.building && vertex.building.player !== playerId) {
-      return [];
+export function calculateLongestRoad(state: GameState): { playerId: string; length: number } {
+  const playerRoads = new Map<string, RoadNetwork[]>();
+  
+  // Group roads by player
+  state.board.edges.forEach((edge, index) => {
+    if (edge.road) {
+      const { playerId } = edge.road;
+      if (!playerRoads.has(playerId)) {
+        playerRoads.set(playerId, []);
+      }
+      playerRoads.get(playerId)?.push({ edges: [index], length: 1 });
     }
-
-    return vertex.adjacentEdges
-      .filter(edgeId => edgeId !== startEdge.id)
-      .map(edgeId => edges.find(e => e.id === edgeId))
-      .filter((e): e is Edge => e !== undefined);
   });
 
-  // Recursively find the longest path through each connected edge
-  for (const nextEdge of connectedEdges) {
-    const length = findLongestPath(
-      nextEdge,
-      edges,
-      vertices,
-      playerId,
-      new Set(visited),
-      depth + 1
-    );
-    maxLength = Math.max(maxLength, length + 1);
-  }
+  // Find longest road for each player
+  let longestRoad = { playerId: '', length: 0 };
+  
+  playerRoads.forEach((networks, playerId) => {
+    const maxLength = Math.max(...networks.map(n => n.length));
+    if (maxLength > longestRoad.length) {
+      longestRoad = { playerId, length: maxLength };
+    }
+  });
 
-  return maxLength;
+  return longestRoad;
 }
 
-export function calculateLongestRoad(
-  edges: Edge[],
-  vertices: Vertex[],
-  playerId: number
-): number {
-  let maxRoadLength = 0;
-
-  // Start from each edge owned by the player
-  const playerEdges = edges.filter(edge => edge.road?.player === playerId);
-
-  for (const startEdge of playerEdges) {
-    const length = findLongestPath(startEdge, edges, vertices, playerId);
-    maxRoadLength = Math.max(maxRoadLength, length);
+function findConnectedRoads(
+  state: GameState,
+  startEdge: number,
+  playerId: string,
+  visited: Set<number>
+): number[] {
+  const connected: number[] = [];
+  const edge = state.board.edges[startEdge];
+  
+  if (!edge.road || edge.road.playerId !== playerId) {
+    return connected;
   }
 
-  return maxRoadLength;
-}
+  visited.add(startEdge);
+  connected.push(startEdge);
 
-export function updateLongestRoad(
-  edges: Edge[],
-  vertices: Vertex[],
-  players: number[]
-): { player: number | null; length: number } {
-  let longestRoad = {
-    player: null as number | null,
-    length: 4 // Minimum length to get longest road
-  };
+  // Find adjacent edges through vertices
+  const [vertex1, vertex2] = edge.vertices;
+  const adjacentEdges = [
+    ...getAdjacentEdges(vertex1),
+    ...getAdjacentEdges(vertex2)
+  ].filter(id => !visited.has(id));
 
-  for (const playerId of players) {
-    const roadLength = calculateLongestRoad(edges, vertices, playerId);
-    if (roadLength > longestRoad.length) {
-      longestRoad = {
-        player: playerId,
-        length: roadLength
-      };
+  for (const adjEdgeId of adjacentEdges) {
+    const adjEdge = state.board.edges[adjEdgeId];
+    if (adjEdge.road?.playerId === playerId) {
+      connected.push(...findConnectedRoads(state, adjEdgeId, playerId, visited));
     }
   }
 
-  return longestRoad;
+  return connected;
+}
+
+function getAdjacentEdges(vertexId: number): number[] {
+  // Implementation needed
+  return [];
 } 
