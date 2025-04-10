@@ -120,7 +120,7 @@ export function GameBoard() {
 
 
   return (
-    <Box position=\"relative\" height=\"600px\" width=\"100%\" borderWidth=\"1px\" borderRadius=\"lg\"> 
+    <Box position="relative" height="600px" width="100%" borderWidth="1px" borderRadius="lg"> 
       {/* Render Hexes */}
       {board.hexes.map((hex, index) => {
         const pos = getHexPosition(index, board.hexes.length); // Use index for placeholder positioning
@@ -130,34 +130,34 @@ export function GameBoard() {
         return (
           <Box
             key={hex.id}
-            position=\"absolute\"
+            position="absolute"
             top={pos.top}
             left={pos.left}
-            width=\"60px\" 
-            height=\"70px\" // Slightly taller for hex shape illusion
+            width="60px" 
+            height="70px" // Slightly taller for hex shape illusion
             bg={color}
-            clipPath=\"polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)\" // Hexagon shape
+            clipPath="polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)" // Hexagon shape
             cursor={phase === 'ROBBER' ? 'pointer' : 'default'}
             onClick={() => handleHexClick(hex.id)}
             borderWidth={isRobberHex ? '3px' : '1px'}
             borderColor={isRobberHex ? 'black' : 'gray.300'}
-            display=\"flex\"
-            alignItems=\"center\"
-            justifyContent=\"center\"
-            flexDirection=\"column\"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            flexDirection="column"
           >
              {/* Display Hex Number Token */}
              {hex.number && (
                  <Box 
-                     borderRadius=\"full\" 
-                     bg=\"whiteAlpha.800\" 
-                     w=\"25px\" 
-                     h=\"25px\" 
-                     display=\"flex\" 
-                     alignItems=\"center\" 
-                     justifyContent=\"center\" 
-                     fontWeight=\"bold\"
-                     fontSize=\"sm\"
+                     borderRadius="full" 
+                     bg="whiteAlpha.800" 
+                     w="25px" 
+                     h="25px" 
+                     display="flex" 
+                     alignItems="center" 
+                     justifyContent="center" 
+                     fontWeight="bold"
+                     fontSize="sm"
                      color={hex.number === 6 || hex.number === 8 ? 'red.600' : 'black'}
                      mb={1} // Margin bottom for number
                  >
@@ -166,7 +166,7 @@ export function GameBoard() {
              )}
              {/* Display Robber Icon/Indicator */}
              {isRobberHex && (
-                 <Box fontSize=\"xl\">&#9760;</Box> // Skull icon for robber
+                 <Box fontSize="xl">&#9760;</Box> // Skull icon for robber
              )}
           </Box>
         );
@@ -180,10 +180,10 @@ export function GameBoard() {
           <Box
             key={edgeId}
             {...style} // Apply calculated position, width, rotation
-            height=\"6px\" // Make roads thicker
+            height="6px" // Make roads thicker
             bg={playerColor} // Use player color if road exists
-            borderRadius=\"sm\"
-            cursor=\"pointer\"
+            borderRadius="sm"
+            cursor="pointer"
             zIndex={2} // Roads on top of hexes but below vertices
             onClick={() => handleEdgeClick(Number(edgeId))} 
           />
@@ -213,15 +213,15 @@ export function GameBoard() {
         return (
           <Box
             key={vertexId}
-            position=\"absolute\"
+            position="absolute"
             top={pos.top}
             left={pos.left}
             width={buildingSize}
             height={buildingSize}
             bg={buildingColor}
             border={!vertex.building ? '1px dashed gray' : '1px solid black'} // Indicate potential build spots
-            transform=\"translate(-50%, -50%)\" // Center the vertex marker
-            cursor=\"pointer\"
+            transform="translate(-50%, -50%)" // Center the vertex marker
+            cursor="pointer"
             zIndex={3} // Vertices on top
             {...buildingShape} // Apply shape style
             onClick={() => handleVertexClick(Number(vertexId))}

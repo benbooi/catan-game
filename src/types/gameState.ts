@@ -24,15 +24,23 @@ export interface GameState {
     size: number;
   };
   tradeOffer: {
-    from: string;
-    to: string;
-    give: Partial<Record<ResourceType, number>>;
-    want: Partial<Record<ResourceType, number>>;
+    playerId: string;
+    offer: Partial<Record<ResourceType, number>>;
+    request: Partial<Record<ResourceType, number>>;
   } | null;
   setupPhase: {
     round: number;
     direction: 'forward' | 'backward';
+    settlementsPlaced: number;
+    roadsPlaced: number;
+    settlementVertexId?: number;
+    roadEdgeId?: number;
   };
+  developmentCardDeck?: DevelopmentCard[];
+  playedDevelopmentCard?: boolean;
+  mustMoveRobber?: boolean;
+  diceRolled?: boolean;
+  winner?: string;
 }
 
 export interface GameError {
@@ -46,10 +54,11 @@ export type GameAction =
   | { type: 'BUILD_CITY'; vertexId: number }
   | { type: 'BUILD_ROAD'; edgeId: number }
   | { type: 'BUY_DEVELOPMENT_CARD' }
-  | { type: 'PLAY_DEVELOPMENT_CARD'; cardIndex: number }
-  | { type: 'TRADE_BANK'; give: ResourceType; want: ResourceType }
-  | { type: 'TRADE_OFFER'; to: string; give: Partial<Record<ResourceType, number>>; want: Partial<Record<ResourceType, number>> }
+  | { type: 'PLAY_DEVELOPMENT_CARD'; cardIndex: number; resources?: ResourceType[]; resource?: ResourceType }
+  | { type: 'TRADE_BANK'; give: ResourceType; receive: ResourceType }
+  | { type: 'TRADE_OFFER'; offer: Partial<Record<ResourceType, number>>; request: Partial<Record<ResourceType, number>> }
   | { type: 'TRADE_ACCEPT' }
   | { type: 'TRADE_REJECT' }
-  | { type: 'MOVE_ROBBER'; hexId: number; targetPlayerId: string }
-  | { type: 'END_TURN' }; 
+  | { type: 'MOVE_ROBBER'; hexId: number; targetPlayerId?: string }
+  | { type: 'END_TURN' }
+  | { type: 'DISCARD_CARDS'; discards: Record<string, Partial<Record<ResourceType, number>>> }; 

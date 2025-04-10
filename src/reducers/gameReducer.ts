@@ -10,7 +10,7 @@ function distributeResources(state: GameState, diceRoll: number): GameState {
     return { ...state, mustMoveRobber: true }; 
   }
 
-  const players = { ...state.players };
+  const players = [...state.players];
 
   state.board.hexes.forEach(hex => {
     if (hex.number === diceRoll && hex.id !== state.board.robber.hexId) {
@@ -18,12 +18,14 @@ function distributeResources(state: GameState, diceRoll: number): GameState {
         const vertex = state.board.vertices[vertexId];
         if (vertex?.building) {
           const playerId = vertex.building.playerId;
-          const player = players[playerId];
-          if (player && hex.type !== 'desert') {
+          const playerIndex = players.findIndex(p => p.id === playerId);
+          
+          if (playerIndex !== -1 && hex.type !== 'desert') {
+            const player = players[playerIndex];
             const resourceCount = vertex.building.type === 'city' ? 2 : 1;
             // Ensure resource key exists before incrementing
             if (hex.type in player.resources) {
-                 players[playerId] = {
+                 players[playerIndex] = {
                    ...player,
                    resources: {
                      ...player.resources,
@@ -41,12 +43,15 @@ function distributeResources(state: GameState, diceRoll: number): GameState {
 }
 
 function applyRobberDiscard(state: GameState, discards: Record<string, Partial<Record<ResourceType, number>>>): GameState {
-    const players = { ...state.players };
+    const players = [...state.players];
+    
     for (const playerId in discards) {
-        const player = players[playerId];
-        if (player) {
+        const playerIndex = players.findIndex(p => p.id === playerId);
+        if (playerIndex !== -1) {
+            const player = players[playerIndex];
             const playerDiscards = discards[playerId];
             const newResources = { ...player.resources };
+            
             for (const resourceKey in playerDiscards) {
                 const resource = resourceKey as ResourceType;
                 const amount = playerDiscards[resource];
@@ -54,22 +59,27 @@ function applyRobberDiscard(state: GameState, discards: Record<string, Partial<R
                     newResources[resource] = Math.max(0, newResources[resource] - amount);
                 }
             }
-            players[playerId] = { ...players[playerId], resources: newResources };
+            
+            players[playerIndex] = { ...player, resources: newResources };
         }
     }
+    
     return { ...state, players, phase: 'MAIN' }; // Move to MAIN after discard
 }
 
 function applyRobberMove(state: GameState, hexId: number, targetPlayerId?: string): GameState {
-  let players = { ...state.players };
+  let players = [...state.players];
   const currentPlayerId = state.currentPlayer;
 
   // Steal resource if a target is chosen and valid
   if (targetPlayerId && targetPlayerId !== currentPlayerId) {
-    const targetPlayer = players[targetPlayerId];
-    const currentPlayer = players[currentPlayerId];
+    const targetPlayerIndex = players.findIndex(p => p.id === targetPlayerId);
+    const currentPlayerIndex = players.findIndex(p => p.id === currentPlayerId);
     
-    if (targetPlayer && currentPlayer) {
+    if (targetPlayerIndex !== -1 && currentPlayerIndex !== -1) {
+        const targetPlayer = players[targetPlayerIndex];
+        const currentPlayer = players[currentPlayerIndex];
+        
         const availableResources = Object.entries(targetPlayer.resources)
             .filter(([_, count]) => count > 0)
             .map(([resource, _]) => resource as ResourceType);
@@ -86,11 +96,8 @@ function applyRobberMove(state: GameState, hexId: number, targetPlayerId?: strin
                 [stolenResource]: (currentPlayer.resources[stolenResource] || 0) + 1,
             };
 
-            players = {
-                ...players,
-                [targetPlayerId]: { ...targetPlayer, resources: newTargetResources },
-                [currentPlayerId]: { ...currentPlayer, resources: newCurrentResources },
-            };
+            players[targetPlayerIndex] = { ...targetPlayer, resources: newTargetResources };
+            players[currentPlayerIndex] = { ...currentPlayer, resources: newCurrentResources };
         }
     }
   }
@@ -100,14 +107,11 @@ function applyRobberMove(state: GameState, hexId: number, targetPlayerId?: strin
     players,
     board: { ...state.board, robber: { hexId: hexId } },
     mustMoveRobber: false, // Robber has been moved
-    // Phase might change depending on whether this was from a 7 roll or Knight
-    // If from a 7 roll, phase might transition back to MAIN or stay ROBBER for discard
-    // If from Knight, stay in MAIN
   };
 }
 
 function nextPlayer(state: GameState): string {
-    const playerIds = Object.keys(state.players);
+    const playerIds = state.players.map(p => p.id);
     const currentIndex = playerIds.indexOf(state.currentPlayer);
     const nextIndex = (currentIndex + 1) % playerIds.length;
     return playerIds[nextIndex];
@@ -145,7 +149,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'BUILD_SETTLEMENT': {
-      const player = state.players[state.currentPlayer];
+      const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+      if (playerIndex === -1) return state;
+      
+      const player = state.players[playerIndex];
       const cost = { wood: 1, brick: 1, wool: 1, grain: 1 };
       const newResources = { ...player.resources };
       let canAfford = true;
@@ -167,7 +174,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const vertex = state.board.vertices[action.vertexId];
       if (!vertex || vertex.building) return state; // Invalid location
 
-      const newVertex: typeof vertex = {
+      const newVertex = {
           ...vertex,
           building: { type: 'settlement', playerId: state.currentPlayer },
       };
@@ -183,12 +190,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           };
       }
 
+      const updatedPlayers = [...state.players];
+      updatedPlayers[playerIndex] = { ...player, resources: newResources };
+
       return {
         ...state,
-        players: {
-          ...state.players,
-          [state.currentPlayer]: { ...player, resources: newResources },
-        },
+        players: updatedPlayers,
         board: {
           ...state.board,
           vertices: {
@@ -203,7 +210,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'BUILD_CITY': {
-      const player = state.players[state.currentPlayer];
+      const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+      if (playerIndex === -1) return state;
+      
+      const player = state.players[playerIndex];
       const cost = { grain: 2, ore: 3 };
       const newResources = { ...player.resources };
       let canAfford = true;
@@ -226,17 +236,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return state;
       }
 
-      const newVertex: typeof vertex = {
+      const newVertex = {
           ...vertex,
           building: { ...vertex.building, type: 'city' },
       };
 
+      const updatedPlayers = [...state.players];
+      updatedPlayers[playerIndex] = { ...player, resources: newResources };
+
       return {
         ...state,
-        players: {
-          ...state.players,
-          [state.currentPlayer]: { ...player, resources: newResources },
-        },
+        players: updatedPlayers,
         board: {
           ...state.board,
           vertices: {
@@ -248,7 +258,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'BUILD_ROAD': {
-      const player = state.players[state.currentPlayer];
+      const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+      if (playerIndex === -1) return state;
+      
+      const player = state.players[playerIndex];
       const cost = { wood: 1, brick: 1 };
       const newResources = { ...player.resources };
       let canAfford = true;
@@ -270,7 +283,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const edge = state.board.edges[action.edgeId];
       if (!edge || edge.road) return state; // Invalid location
 
-      const newEdge: typeof edge = {
+      const newEdge = {
         ...edge,
         road: { playerId: state.currentPlayer },
       };
@@ -285,7 +298,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
                roadEdgeId: action.edgeId // Store road placed
           };
           // Determine if setup round/phase ends
-          const numPlayers = Object.keys(state.players).length;
+          const numPlayers = state.players.length;
           if (nextSetupPhase.round === 1 && nextSetupPhase.roadsPlaced === numPlayers) {
               // End of first round, reverse direction
               nextSetupPhase = { ...nextSetupPhase, round: 2, direction: 'backward', settlementsPlaced: 0, roadsPlaced: 0 };
@@ -297,14 +310,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           }
       }
 
+      const updatedPlayers = [...state.players];
+      updatedPlayers[playerIndex] = { ...player, resources: newResources };
+
       // Note: Longest road calculation happens in the store after the reducer
 
       return {
         ...state,
-        players: {
-          ...state.players,
-          [state.currentPlayer]: { ...player, resources: newResources },
-        },
+        players: updatedPlayers,
         board: {
           ...state.board,
           edges: {
@@ -314,12 +327,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
         setupPhase: nextSetupPhase,
         phase: nextPhase, // Update phase if setup ended
-        // If setup ended, who is the next player? Should be handled by END_TURN?
       };
     }
 
     case 'BUY_DEVELOPMENT_CARD': {
-        const player = state.players[state.currentPlayer];
+        const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+        if (playerIndex === -1) return state;
+        
+        const player = state.players[playerIndex];
         const cost = { ore: 1, wool: 1, grain: 1 };
         const newResources = { ...player.resources };
         let canAfford = true;
@@ -335,7 +350,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
 
         if (!canAfford) return state;
-        if (state.developmentCardDeck.length === 0) return state; // Should be validated
+        if (!state.developmentCardDeck || state.developmentCardDeck.length === 0) return state; // Should be validated
 
         const remainingDeck = [...state.developmentCardDeck];
         // Consider shuffling deck initially in the store
@@ -350,22 +365,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
         const newDevCards = [...player.developmentCards, newCard];
 
+        const updatedPlayers = [...state.players];
+        updatedPlayers[playerIndex] = {
+            ...player,
+            resources: newResources,
+            developmentCards: newDevCards
+        };
+
         return {
              ...state,
-             players: {
-                 ...state.players,
-                 [state.currentPlayer]: { 
-                     ...player, 
-                     resources: newResources,
-                     developmentCards: newDevCards
-                 },
-             },
+             players: updatedPlayers,
              developmentCardDeck: remainingDeck,
         };
     }
 
     case 'PLAY_DEVELOPMENT_CARD': { 
-        const player = state.players[state.currentPlayer];
+        const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+        if (playerIndex === -1) return state;
+        
+        const player = state.players[playerIndex];
         const card = player.developmentCards?.[action.cardIndex];
 
         // Validation should prevent playing invalid/used/wrong turn cards
@@ -376,12 +394,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const newDevCards = [...player.developmentCards];
         newDevCards[action.cardIndex] = { ...card, used: true };
 
+        const updatedPlayers = [...state.players];
+        updatedPlayers[playerIndex] = {
+            ...player, 
+            developmentCards: newDevCards
+        };
+
         let nextState = { 
             ...state, 
-            players: { 
-                ...state.players, 
-                [state.currentPlayer]: { ...player, developmentCards: newDevCards } 
-            },
+            players: updatedPlayers,
             playedDevelopmentCard: true, // Mark that a card was played this turn
         };
 
@@ -389,374 +410,289 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         switch (card.type) {
             case 'knight':
                  // Update knights played count for Largest Army calculation
-                const updatedPlayer = { ...nextState.players[state.currentPlayer], knightsPlayed: (player.knightsPlayed || 0) + 1 };
+                const updatedPlayer = { ...nextState.players[playerIndex], knightsPlayed: (player.knightsPlayed || 0) + 1 };
+                const knightPlayers = [...nextState.players];
+                knightPlayers[playerIndex] = updatedPlayer;
+                
                 nextState = {
                      ...nextState, 
-                     players: { ...nextState.players, [state.currentPlayer]: updatedPlayer },
+                     players: knightPlayers,
                      mustMoveRobber: true, // Player must now move the robber
                      phase: 'ROBBER' // Or handle within MAIN phase logic?
                 };
                 break;
+                
             case 'roadBuilding':
-                // Grant player resources/flags to build 2 roads for free
-                // This might require temporary state or specific handling in BUILD_ROAD
-                // Option 1: Add temporary resources (less clean)
-                // Option 2: Add a flag `player.canBuildFreeRoads = 2`
-                console.warn('Road Building effect needs implementation');
+                // Allow player to build 2 roads for free - could be handled via UI state
+                // Here we could just set a flag for the UI to allow 2 free road placements
                 break;
+                
             case 'yearOfPlenty':
-                // Player chooses 2 resources from the bank
-                // This requires additional action/payload: action.resources = [res1, res2]
-                const chosenResources = action.resources; // Assuming payload exists
-                if (chosenResources && chosenResources.length === 2) {
-                    const resourcesToAdd = { ...nextState.players[state.currentPlayer].resources };
+                // Player takes 2 resource cards of their choice
+                if (action.resources && action.resources.length <= 2) {
+                    const chosenResources = action.resources;
+                    const updatedPlayerIndex = nextState.players.findIndex(p => p.id === state.currentPlayer);
+                    const resourcesToAdd = { ...nextState.players[updatedPlayerIndex].resources };
                     chosenResources.forEach(res => {
-                        if (res in resourcesToAdd) {
-                             resourcesToAdd[res] = (resourcesToAdd[res] || 0) + 1;
-                        }
+                        resourcesToAdd[res] = (resourcesToAdd[res] || 0) + 1;
                     });
-                     const updatedPlayerWithResources = { ...nextState.players[state.currentPlayer], resources: resourcesToAdd };
-                     nextState = { ...nextState, players: { ...nextState.players, [state.currentPlayer]: updatedPlayerWithResources } };
-                } else {
-                     console.error('Year of Plenty requires 2 chosen resources in action payload');
-                     return state; // Or handle error state
+                    
+                    const yearOfPlentyPlayers = [...nextState.players];
+                    const updatedPlayerWithResources = { 
+                        ...nextState.players[updatedPlayerIndex], 
+                        resources: resourcesToAdd 
+                    };
+                    yearOfPlentyPlayers[updatedPlayerIndex] = updatedPlayerWithResources;
+                    
+                    nextState = { ...nextState, players: yearOfPlentyPlayers };
                 }
                 break;
+                
             case 'monopoly':
-                // Player chooses 1 resource type, takes all of it from other players
-                // Requires action.resource: ResourceType
-                const monopolizedResource = action.resource;
-                if (monopolizedResource) {
+                // Player takes all resources of one type from all other players
+                if (action.resource) {
+                    const monopolizedResource = action.resource;
+                    const updatedPlayers = [...nextState.players];
                     let totalStolen = 0;
-                    const updatedPlayers = { ...nextState.players };
-                    for (const pId in updatedPlayers) {
-                         if (pId !== state.currentPlayer) {
-                             const targetPlayer = updatedPlayers[pId];
-                             const amountStolen = targetPlayer.resources[monopolizedResource] || 0;
-                             if (amountStolen > 0) {
-                                 totalStolen += amountStolen;
-                                 updatedPlayers[pId] = { 
-                                     ...targetPlayer, 
-                                     resources: { ...targetPlayer.resources, [monopolizedResource]: 0 }
-                                 };
-                             }
-                         }
-                     }
-                    const currentPlayerResources = { ...updatedPlayers[state.currentPlayer].resources };
+                    
+                    // Take resources from all other players
+                    for (let i = 0; i < updatedPlayers.length; i++) {
+                        if (updatedPlayers[i].id !== state.currentPlayer) {
+                            const targetPlayer = updatedPlayers[i];
+                            const amount = targetPlayer.resources[monopolizedResource] || 0;
+                            if (amount > 0) {
+                                totalStolen += amount;
+                                updatedPlayers[i] = {
+                                    ...targetPlayer,
+                                    resources: {
+                                        ...targetPlayer.resources,
+                                        [monopolizedResource]: 0
+                                    }
+                                };
+                            }
+                        }
+                    }
+                    
+                    // Add the stolen resources to the current player
+                    const currentPlayerIndex = updatedPlayers.findIndex(p => p.id === state.currentPlayer);
+                    const currentPlayerResources = { ...updatedPlayers[currentPlayerIndex].resources };
                     currentPlayerResources[monopolizedResource] = (currentPlayerResources[monopolizedResource] || 0) + totalStolen;
-                    updatedPlayers[state.currentPlayer] = { ...updatedPlayers[state.currentPlayer], resources: currentPlayerResources };
+                    updatedPlayers[currentPlayerIndex] = { 
+                        ...updatedPlayers[currentPlayerIndex], 
+                        resources: currentPlayerResources 
+                    };
+                    
                     nextState = { ...nextState, players: updatedPlayers };
-                } else {
-                    console.error('Monopoly requires chosen resource in action payload');
-                    return state;
                 }
                 break;
-            // victoryPoint case is handled by not being playable
         }
-
+        
         return nextState;
     }
 
     case 'TRADE_BANK': {
-        const player = state.players[state.currentPlayer];
-        const ratio = getTradeRatio(state, state.currentPlayer, action.give); // Use helper
-        const cost = { [action.give]: ratio };
-        const gain = { [action.receive]: 1 };
-
-        if (!hasEnoughResources(player.resources, cost)) return state; // Validation check
-
+        const playerIndex = state.players.findIndex(p => p.id === state.currentPlayer);
+        if (playerIndex === -1) return state;
+        
+        const player = state.players[playerIndex];
+        const { give, receive } = action;
+        
+        // Determine trade ratio (4:1 default, can be improved by ports)
+        const ratio = getTradeRatio(state, state.currentPlayer, give);
+        const loss = { [give]: ratio };
+        const gain = { [receive]: 1 };
+        
+        // Check if player has enough resources
+        if (player.resources[give] < ratio) return state;
+        
+        // Apply the trade
         const newResources = { ...player.resources };
-        newResources[action.give] -= ratio;
-        newResources[action.receive] = (newResources[action.receive] || 0) + gain[action.receive];
-
+        newResources[give] = newResources[give] - ratio;
+        newResources[receive] = (newResources[receive] || 0) + gain[receive];
+        
+        const updatedPlayers = [...state.players];
+        updatedPlayers[playerIndex] = { ...player, resources: newResources };
+        
         return {
             ...state,
-            players: {
-                ...state.players,
-                [state.currentPlayer]: { ...player, resources: newResources },
-            },
+            players: updatedPlayers
         };
     }
 
     case 'TRADE_OFFER': {
-        // Action simply sets the trade offer in the state
-        // Validation ensures the player has the resources to offer
+        // Create a new trade offer
+        if (state.tradeOffer) return state; // Already a trade in progress
+        
         return {
             ...state,
             tradeOffer: {
-                 playerId: state.currentPlayer,
-                 offer: action.offer,
-                 request: action.request,
-            },
+                playerId: state.currentPlayer,
+                offer: action.offer,
+                request: action.request,
+            }
         };
     }
 
-    case 'TRADE_ACCEPT': { 
-        if (!state.tradeOffer) return state; // No offer to accept
-
-        const acceptingPlayerId = state.currentPlayer;
-        const offeringPlayerId = state.tradeOffer.playerId;
+    case 'TRADE_ACCEPT': {
+        // Accept and execute a trade offer
+        if (!state.tradeOffer) return state;
         
-        if (acceptingPlayerId === offeringPlayerId) return state; // Cannot accept own
-
-        const acceptingPlayer = state.players[acceptingPlayerId];
-        const offeringPlayer = state.players[offeringPlayerId];
+        const offeringPlayerId = state.tradeOffer.playerId;
+        const acceptingPlayerId = state.currentPlayer;
+        
+        const offeringPlayerIndex = state.players.findIndex(p => p.id === offeringPlayerId);
+        const acceptingPlayerIndex = state.players.findIndex(p => p.id === acceptingPlayerId);
+        
+        if (offeringPlayerIndex === -1 || acceptingPlayerIndex === -1) return state;
+        
+        const offeringPlayer = state.players[offeringPlayerIndex];
+        const acceptingPlayer = state.players[acceptingPlayerIndex];
+        
         const { offer, request } = state.tradeOffer;
-
-        if (!acceptingPlayer || !offeringPlayer) return state; // Players must exist
-
-        // Double check resources just before exchange
-        if (!hasEnoughResources(acceptingPlayer.resources, request) || !hasEnoughResources(offeringPlayer.resources, offer)) {
-            console.warn('Trade resources changed between offer and accept, cancelling.');
-            return { ...state, tradeOffer: null }; // Cancel trade if resources changed
+        
+        // Verify both players have enough resources
+        for (const resource in offer) {
+            const resourceType = resource as ResourceType;
+            if ((offeringPlayer.resources[resourceType] || 0) < (offer[resourceType] || 0)) {
+                return state; // Offering player doesn't have enough
+            }
         }
-
-        // Perform the resource exchange
-        const newAcceptingResources = { ...acceptingPlayer.resources };
-        const newOfferingResources = { ...offeringPlayer.resources };
-
-        // Subtract requested from accepter, add offered to accepter
-        for (const resKey in request) {
-             const res = resKey as ResourceType;
-             newAcceptingResources[res] -= (request[res] ?? 0);
+        
+        for (const resource in request) {
+            const resourceType = resource as ResourceType;
+            if ((acceptingPlayer.resources[resourceType] || 0) < (request[resourceType] || 0)) {
+                return state; // Accepting player doesn't have enough
+            }
         }
-        for (const resKey in offer) {
-            const res = resKey as ResourceType;
-            newAcceptingResources[res] = (newAcceptingResources[res] || 0) + (offer[res] ?? 0);
+        
+        // Execute the trade
+        const updatedOfferingResources = { ...offeringPlayer.resources };
+        const updatedAcceptingResources = { ...acceptingPlayer.resources };
+        
+        // Transfer resources from offering player to accepting player
+        for (const resource in offer) {
+            const resourceType = resource as ResourceType;
+            const amount = offer[resourceType] || 0;
+            updatedOfferingResources[resourceType] -= amount;
+            updatedAcceptingResources[resourceType] = (updatedAcceptingResources[resourceType] || 0) + amount;
         }
-
-        // Subtract offered from offerer, add requested to offerer
-        for (const resKey in offer) {
-             const res = resKey as ResourceType;
-             newOfferingResources[res] -= (offer[res] ?? 0);
+        
+        // Transfer resources from accepting player to offering player
+        for (const resource in request) {
+            const resourceType = resource as ResourceType;
+            const amount = request[resourceType] || 0;
+            updatedAcceptingResources[resourceType] -= amount;
+            updatedOfferingResources[resourceType] = (updatedOfferingResources[resourceType] || 0) + amount;
         }
-         for (const resKey in request) {
-            const res = resKey as ResourceType;
-            newOfferingResources[res] = (newOfferingResources[res] || 0) + (request[res] ?? 0);
-        }
-
+        
+        const updatedPlayers = [...state.players];
+        updatedPlayers[offeringPlayerIndex] = { ...offeringPlayer, resources: updatedOfferingResources };
+        updatedPlayers[acceptingPlayerIndex] = { ...acceptingPlayer, resources: updatedAcceptingResources };
+        
         return {
-             ...state,
-             players: {
-                 ...state.players,
-                 [acceptingPlayerId]: { ...acceptingPlayer, resources: newAcceptingResources },
-                 [offeringPlayerId]: { ...offeringPlayer, resources: newOfferingResources },
-             },
-             tradeOffer: null, // Clear the trade offer after completion
+            ...state,
+            players: updatedPlayers,
+            tradeOffer: null // Clear the trade offer
         };
     }
 
     case 'TRADE_REJECT': {
-         // Simply clear the trade offer
+        // Reject a trade offer (just clear it)
         if (!state.tradeOffer) return state;
-        return { ...state, tradeOffer: null };
-    }
-
-    case 'END_TURN': {
-        // Determine next player based on current phase (setup vs main game)
-        let nextPlayerId = state.currentPlayer;
-        let nextPhase = state.phase;
-        let nextTurnNumber = state.turnNumber;
-        let nextSetupPhase = state.setupPhase;
-
-        if (state.setupPhase) {
-             // Setup Phase Turn Progression
-             const playerIds = Object.keys(state.players);
-             const currentIndex = playerIds.indexOf(state.currentPlayer);
-
-             if (state.setupPhase.round === 1) {
-                  // Forward direction
-                  if (currentIndex < playerIds.length - 1) {
-                      nextPlayerId = playerIds[currentIndex + 1];
-                  } else {
-                      // Last player finished round 1, starts round 2 immediately
-                      nextPlayerId = playerIds[currentIndex]; 
-                      // Round 1 completion logic (reversing) is handled in BUILD_ROAD?
-                  }
-             } else { // Round 2
-                  // Backward direction
-                  if (currentIndex > 0) {
-                      nextPlayerId = playerIds[currentIndex - 1];
-                  } else {
-                      // First player (last in backward) finished round 2
-                      nextPlayerId = playerIds[0]; // Game starts with the first player
-                       // Setup phase end logic is handled in BUILD_ROAD?
-                  }
-             }
-             // Reset placement flags for the new turn in setup
-             if (nextSetupPhase) {
-                  nextSetupPhase = { ...nextSetupPhase, settlementsPlaced: 0, roadsPlaced: 0, settlementVertexId: undefined, roadEdgeId: undefined };
-             }
-             // Phase remains SETUP until explicitly changed (e.g., in BUILD_ROAD)
-
-        } else {
-            // Main Game Turn Progression
-             nextPlayerId = nextPlayer(state);
-             nextPhase = 'ROLL'; // Next player starts with ROLL phase
-             nextTurnNumber = state.turnNumber + (playerIds.indexOf(nextPlayerId) === 0 ? 1 : 0); // Increment turn number when back to first player
-        }
-
+        
         return {
-          ...state,
-          currentPlayer: nextPlayerId,
-          phase: nextPhase,
-          turnNumber: nextTurnNumber,
-          diceRolled: false, // Reset for next turn
-          playedDevelopmentCard: false, // Reset for next turn
-          tradeOffer: null, // Clear any lingering trade offer
-          setupPhase: nextSetupPhase, // Update setup phase state
-          mustMoveRobber: false, // Reset flag (should be handled by MOVE_ROBBER action)
+            ...state,
+            tradeOffer: null
         };
     }
 
+    case 'END_TURN': {
+        const playerIds = state.players.map(p => p.id);
+        let nextPlayerId = state.currentPlayer;
+        let nextTurnNumber = state.turnNumber;
+        
+        // Determine next player based on normal play or setup phase rules
+        if (state.setupPhase) {
+            const currentIndex = playerIds.indexOf(state.currentPlayer);
+            const direction = state.setupPhase.direction;
+            const playerCount = playerIds.length;
+            
+            if (direction === 'forward') {
+                // In forward direction, increment index
+                nextPlayerId = playerIds[(currentIndex + 1) % playerCount];
+            } else { // backward
+                // In backward direction, decrement index
+                nextPlayerId = playerIds[(currentIndex - 1 + playerCount) % playerCount];
+            }
+            
+            // Reset setupPhase properties if we've moved to a new player
+            let nextSetupPhase = { ...state.setupPhase };
+            if (nextPlayerId !== state.currentPlayer) {
+                nextSetupPhase = { ...nextSetupPhase, settlementsPlaced: 0, roadsPlaced: 0, settlementVertexId: undefined, roadEdgeId: undefined };
+            }
+            
+            // Increment turn number if we've looped back to the first player
+            nextTurnNumber = state.turnNumber + (playerIds.indexOf(nextPlayerId) === 0 ? 1 : 0); // Increment turn number when back to first player
+            
+            return {
+                ...state,
+                currentPlayer: nextPlayerId,
+                setupPhase: nextSetupPhase,
+                turnNumber: nextTurnNumber
+            };
+        } else {
+            // Normal play - go to next player in order
+            nextPlayerId = nextPlayer(state);
+            nextTurnNumber = playerIds.indexOf(nextPlayerId) === 0 ? state.turnNumber + 1 : state.turnNumber;
+            
+            return {
+                ...state,
+                currentPlayer: nextPlayerId,
+                turnNumber: nextTurnNumber,
+                diceRolled: false, // Reset for next turn
+                playedDevelopmentCard: false // Reset for next turn
+            };
+        }
+    }
+
     default:
-      // Should not happen if action types are exhaustive
       return state;
   }
 }
 
-
-// Need helper functions like hasEnoughResources, getTradeRatio if not imported
+// Helper function to check if a player has enough resources for a cost
 function hasEnoughResources(
     playerResources: Record<ResourceType, number>,
     cost: Partial<Record<ResourceType, number>>
 ): boolean {
-    for (const resourceKey in cost) {
-        const resource = resourceKey as ResourceType;
-        const requiredAmount = cost[resource];
-        if (requiredAmount !== undefined && requiredAmount > 0) {
-            if (!(resource in playerResources) || playerResources[resource] < requiredAmount) {
-                return false;
-            }
+    for (const resource in cost) {
+        const resourceType = resource as ResourceType;
+        if ((playerResources[resourceType] || 0) < (cost[resourceType] || 0)) {
+            return false;
         }
     }
     return true;
 }
 
+// Helper function to get trade ratio for a resource based on ports
 function getTradeRatio(state: GameState, playerId: string, resource: ResourceType): number {
-  let minRatio = 4; 
-  const player = state.players[playerId];
-  if (!player) return minRatio;
-
-  const playerVertices = Object.keys(state.board.vertices)
-      .map(Number)
-      .filter(vertexId => state.board.vertices[vertexId]?.building?.playerId === playerId);
-
+  const player = state.players.find(p => p.id === playerId);
+  
+  if (!player) return 4; // Default ratio
+  
+  let minRatio = 4; // Default trade ratio
+  
+  const playerVertices = Object.entries(state.board.vertices)
+      .filter(([_, vertex]) => vertex.building?.playerId === playerId)
+      .map(([id, _]) => Number(id));
+  
   state.board.ports?.forEach(port => {
-      if (port.vertices.some(portVertexId => playerVertices.includes(portVertexId))) {
+      if (port.vertices.some(pv => playerVertices.includes(pv))) {
           if (port.type === 'generic' || port.type === resource) {
               minRatio = Math.min(minRatio, port.ratio);
           }
       }
   });
+  
   return minRatio;
-}
-
-function distributeResources(state: GameState, diceRoll: number): GameState {
-  if (diceRoll === 7) {
-    // Robber activation - handled separately or by setting mustMoveRobber flag
-    return { ...state, mustMoveRobber: true }; 
-  }
-
-  const players = { ...state.players };
-
-  state.board.hexes.forEach(hex => {
-    if (hex.number === diceRoll && hex.id !== state.board.robber.hexId) {
-      hex.vertices.forEach(vertexId => {
-        const vertex = state.board.vertices[vertexId];
-        if (vertex?.building) {
-          const playerId = vertex.building.playerId;
-          const player = players[playerId];
-          if (player && hex.type !== 'desert') {
-            const resourceCount = vertex.building.type === 'city' ? 2 : 1;
-            // Ensure resource key exists before incrementing
-            if (hex.type in player.resources) {
-                 players[playerId] = {
-                   ...player,
-                   resources: {
-                     ...player.resources,
-                     [hex.type]: (player.resources[hex.type as ResourceType] || 0) + resourceCount,
-                   },
-                 };
-            }
-          }
-        }
-      });
-    }
-  });
-
-  return { ...state, players };
-}
-
-function applyRobberDiscard(state: GameState, discards: Record<string, Partial<Record<ResourceType, number>>>): GameState {
-    const players = { ...state.players };
-    for (const playerId in discards) {
-        const player = players[playerId];
-        if (player) {
-            const playerDiscards = discards[playerId];
-            const newResources = { ...player.resources };
-            for (const resourceKey in playerDiscards) {
-                const resource = resourceKey as ResourceType;
-                const amount = playerDiscards[resource];
-                if (amount !== undefined && newResources[resource] !== undefined) {
-                    newResources[resource] = Math.max(0, newResources[resource] - amount);
-                }
-            }
-            players[playerId] = { ...players[playerId], resources: newResources };
-        }
-    }
-    return { ...state, players, phase: 'MAIN' }; // Move to MAIN after discard
-}
-
-function applyRobberMove(state: GameState, hexId: number, targetPlayerId?: string): GameState {
-  let players = { ...state.players };
-  const currentPlayerId = state.currentPlayer;
-
-  // Steal resource if a target is chosen and valid
-  if (targetPlayerId && targetPlayerId !== currentPlayerId) {
-    const targetPlayer = players[targetPlayerId];
-    const currentPlayer = players[currentPlayerId];
-    
-    if (targetPlayer && currentPlayer) {
-        const availableResources = Object.entries(targetPlayer.resources)
-            .filter(([_, count]) => count > 0)
-            .map(([resource, _]) => resource as ResourceType);
-
-        if (availableResources.length > 0) {
-            const stolenResource = availableResources[Math.floor(Math.random() * availableResources.length)];
-            
-            const newTargetResources = {
-                 ...targetPlayer.resources,
-                 [stolenResource]: targetPlayer.resources[stolenResource] - 1,
-            };
-            const newCurrentResources = {
-                ...currentPlayer.resources,
-                [stolenResource]: (currentPlayer.resources[stolenResource] || 0) + 1,
-            };
-
-            players = {
-                ...players,
-                [targetPlayerId]: { ...targetPlayer, resources: newTargetResources },
-                [currentPlayerId]: { ...currentPlayer, resources: newCurrentResources },
-            };
-        }
-    }
-  }
-
-  return {
-    ...state,
-    players,
-    board: { ...state.board, robber: { hexId: hexId } },
-    mustMoveRobber: false, // Robber has been moved
-    // Phase might change depending on whether this was from a 7 roll or Knight
-    // If from a 7 roll, phase might transition back to MAIN or stay ROBBER for discard
-    // If from Knight, stay in MAIN
-  };
-}
-
-function nextPlayer(state: GameState): string {
-    const playerIds = Object.keys(state.players);
-    const currentIndex = playerIds.indexOf(state.currentPlayer);
-    const nextIndex = (currentIndex + 1) % playerIds.length;
-    return playerIds[nextIndex];
 } 

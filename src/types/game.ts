@@ -1,7 +1,7 @@
 export type ResourceType = 'wood' | 'brick' | 'ore' | 'grain' | 'wool';
 export type DevelopmentCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly';
 
-export type GamePhase = 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER';
+export type GamePhase = 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER' | 'FINISHED';
 
 export interface Player {
   id: string;
@@ -10,6 +10,9 @@ export interface Player {
   resources: Record<ResourceType, number>;
   developmentCards: DevelopmentCard[];
   score: number;
+  knightsPlayed: number;
+  hasLongestRoad?: boolean;
+  hasLargestArmy?: boolean;
 }
 
 export interface Hex {
@@ -44,6 +47,7 @@ export interface Edge {
 export interface DevelopmentCard {
   type: 'knight' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly' | 'victoryPoint';
   used: boolean;
+  turnPurchased?: number;
 }
 
 export interface GameState {
@@ -79,7 +83,7 @@ export interface Road {
 }
 
 export interface Port {
-  type: ResourceType | 'any';
+  type: ResourceType | 'any' | 'generic';
   ratio: number;
   vertices: [number, number];
 } 

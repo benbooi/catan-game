@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { GameState, GameAction, GameError } from '../types/gameState';
-import { Player, ResourceType, DevelopmentCard, Board, Hex, Vertex, Edge, Port /*, GamePhase */ } from '../types/game'; // Removed unused GamePhase
+import { Player, ResourceType, DevelopmentCard, Hex, Vertex, Edge, Port, GamePhase } from '../types/game';
 import { gameReducer } from '../reducers/gameReducer';
 import { validateGameAction } from '../validators/gameValidator';
 import { calculateLongestRoad } from '../utils/longestRoad';
 // import { updateLongestRoad } from '../utils/longestRoad'; // Function doesn't exist or wasn't exported
 import { calculateVictoryPoints } from '../utils/scoring'; // Assuming scoring utils exist
-import { INITIAL_RESOURCES, DEVELOPMENT_CARD_DECK } from '../constants/gameConstants';
+import { INITIAL_RESOURCES, DEVELOPMENT_CARDS } from '../constants/gameConstants';
 import { initializeBoard } from '../initializers/boardInitializer'; // Assuming board initializer exists
 import { v4 as uuidv4 } from 'uuid'; // Ensure uuid is installed
 
@@ -40,27 +40,31 @@ const createInitialPlayers = (numPlayers: number): Record<string, Player> => {
 };
 
 // Initialize the game state
-// Assuming initializeBoard() returns a Board type object
-const initialBoard: Board = initializeBoard();
+// Assuming initializeBoard() returns a board object
+const initialBoard = initializeBoard();
 const initialPlayers = createInitialPlayers(2); // Start with 2 players
 const initialPlayerIds = Object.keys(initialPlayers);
 
 const initialState: GameState = {
-  players: initialPlayers,
+  players: Object.values(initialPlayers),
   currentPlayer: initialPlayerIds[0], // Start with the first player
   board: initialBoard,
   phase: 'SETUP', // Initial phase
   turnNumber: 1,
-  diceRolled: false,
   diceRoll: null,
-  developmentCardDeck: [...DEVELOPMENT_CARD_DECK], // Shuffle this?
+  developmentCardDeck: [...DEVELOPMENT_CARDS], // Use the development cards from constants
   longestRoad: { playerId: null, length: 0 },
-  largestArmy: { playerId: null, count: 0 },
+  largestArmy: { playerId: null, size: 0 },
   tradeOffer: null,
   playedDevelopmentCard: false, // Track if a card was played this turn
   mustMoveRobber: false,      // Flag set after rolling a 7
-  setupPhase: { round: 1, direction: 'forward', settlementsPlaced: 0, roadsPlaced: 0 }, // Initial setup state
-  winner: null,
+  setupPhase: { 
+    round: 1, 
+    direction: 'forward', 
+    settlementsPlaced: 0, 
+    roadsPlaced: 0 
+  }, // Initial setup state
+  diceRolled: false
 };
 
 // Create the Zustand store
@@ -82,7 +86,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         board: currentState.board,
         phase: currentState.phase,
         turnNumber: currentState.turnNumber,
-        diceRolled: currentState.diceRolled,
         diceRoll: currentState.diceRoll,
         developmentCardDeck: currentState.developmentCardDeck,
         longestRoad: currentState.longestRoad,
@@ -92,6 +95,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         mustMoveRobber: currentState.mustMoveRobber,
         setupPhase: currentState.setupPhase,
         winner: currentState.winner,
+        diceRolled: currentState.diceRolled
     };
     error = validateGameAction(coreGameState, action);
 
@@ -107,7 +111,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       nextState = gameReducer(coreGameState, action);
     } catch (e: any) {
       console.error('Reducer Error:', e);
-      set({ error: { code: 'REDUCER_ERROR', message: e.message || 'Error applying action.' }});
+      set({ error: { code: 'INVALID_LOCATION', message: e.message || 'Error applying action.' }});
       return;
     }
     
@@ -118,13 +122,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const longestRoadResult = calculateLongestRoad(nextState);
     if (longestRoadResult.playerId !== nextState.longestRoad.playerId || longestRoadResult.length !== nextState.longestRoad.length) {
         // Update hasLongestRoad status for players
-        const playersWithUpdatedRoad = { ...nextState.players };
-        if (nextState.longestRoad.playerId && playersWithUpdatedRoad[nextState.longestRoad.playerId]) {
-             playersWithUpdatedRoad[nextState.longestRoad.playerId].hasLongestRoad = false;
+        const playersWithUpdatedRoad = [...nextState.players];
+        const longestRoadPlayerIndex = playersWithUpdatedRoad.findIndex(p => p.id === nextState.longestRoad.playerId);
+        const newLongestRoadPlayerIndex = playersWithUpdatedRoad.findIndex(p => p.id === longestRoadResult.playerId);
+        
+        if (longestRoadPlayerIndex !== -1) {
+            playersWithUpdatedRoad[longestRoadPlayerIndex].hasLongestRoad = false;
         }
-        if (longestRoadResult.playerId && playersWithUpdatedRoad[longestRoadResult.playerId]) {
-            playersWithUpdatedRoad[longestRoadResult.playerId].hasLongestRoad = true;
+        if (newLongestRoadPlayerIndex !== -1) {
+            playersWithUpdatedRoad[newLongestRoadPlayerIndex].hasLongestRoad = true;
         }
+        
         nextState = { 
             ...nextState, 
             longestRoad: longestRoadResult,
@@ -132,18 +140,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
     }
 
-    // Recalculate Largest Army (assuming a function exists)
-    // const largestArmyResult = calculateLargestArmy(nextState);
-    // if (largestArmyResult.playerId !== nextState.largestArmy.playerId) {
-    //      nextState = { ...nextState, largestArmy: largestArmyResult };
-    // }
-
     // Recalculate Victory Points for all players
-    let updatedPlayers = { ...nextState.players };
+    let updatedPlayers = [...nextState.players];
     let potentialWinner: string | null = null;
-    for (const playerId in updatedPlayers) {
+    for (let i = 0; i < updatedPlayers.length; i++) {
+        const playerId = updatedPlayers[i].id;
         const score = calculateVictoryPoints(nextState, playerId);
-        updatedPlayers[playerId] = { ...updatedPlayers[playerId], score: score };
+        updatedPlayers[i] = { ...updatedPlayers[i], score: score };
         if (score >= 10) { // Check for winner (use constant for VP goal)
             potentialWinner = playerId;
         }
@@ -152,7 +155,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Check for winner - needs to happen *after* all points are calculated
     if (potentialWinner && !nextState.winner) { // Only declare winner once
-        nextState = { ...nextState, winner: potentialWinner, phase: 'FINISHED' };
+        nextState = { ...nextState, winner: potentialWinner, phase: 'FINISHED' as GamePhase };
     }
 
     // 4. Update Store State

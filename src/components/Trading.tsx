@@ -143,14 +143,14 @@ export function Trading() {
             <Heading size="sm" mb={2}>Offer Trade to Players</Heading>
             <VStack align="stretch" spacing={1} mb={2}>
                 <Text fontSize="xs">You Offer:</Text>
-                 <Wrap spacing={2}>
+                <Wrap spacing={2}>
                     {resourceTypes.map(resource => (
-                        <WrapItem key="offer-"+resource>
-                             <HStack>
-                                 <Text minW="40px" fontSize="sm">{resource}:</Text>
+                        <WrapItem key={`offer-${resource}`}>
+                            <HStack>
+                                <Text minW="40px" fontSize="sm">{resource}:</Text>
                                 <NumberInput size="xs" maxW="60px" min={0} max={player.resources[resource] ?? 0} 
-                                     value={offerResources[resource] || 0} 
-                                     onChange={(_, valNum) => handleResourceChange("offer", resource, valNum)}>
+                                    value={offerResources[resource] || 0} 
+                                    onChange={(_, valNum) => handleResourceChange("offer", resource, valNum)}>
                                     <NumberInputField />
                                     <NumberInputStepper>
                                         <NumberIncrementStepper />
@@ -160,18 +160,18 @@ export function Trading() {
                             </HStack>
                         </WrapItem>
                     ))}
-                 </Wrap>
+                </Wrap>
             </VStack>
-             <VStack align="stretch" spacing={1} mb={2}>
+            <VStack align="stretch" spacing={1} mb={2}>
                 <Text fontSize="xs">You Request:</Text>
                 <Wrap spacing={2}>
                     {resourceTypes.map(resource => (
-                        <WrapItem key="request-"+resource>
-                             <HStack>
-                                 <Text minW="40px" fontSize="sm">{resource}:</Text>
+                        <WrapItem key={`request-${resource}`}>
+                            <HStack>
+                                <Text minW="40px" fontSize="sm">{resource}:</Text>
                                 <NumberInput size="xs" maxW="60px" min={0} 
                                     value={requestResources[resource] || 0}
-                                     onChange={(_, valNum) => handleResourceChange("request", resource, valNum)}>
+                                    onChange={(_, valNum) => handleResourceChange("request", resource, valNum)}>
                                     <NumberInputField />
                                     <NumberInputStepper>
                                         <NumberIncrementStepper />
@@ -181,7 +181,7 @@ export function Trading() {
                             </HStack>
                         </WrapItem>
                     ))}
-                 </Wrap>
+                </Wrap>
             </VStack>
             <Button onClick={handleOfferTrade} isDisabled={!canTrade || !!tradeOffer} size="sm" colorScheme="orange">
                 Offer Trade
@@ -191,7 +191,7 @@ export function Trading() {
         {/* Active Trade Offer Section */}
         {tradeOffer && (
           <Box p={3} borderWidth="1px" borderRadius="md" bg="yellow.50">
-            <Heading size="xs" mb={2}>Active Offer from {players[tradeOffer.playerId]?.name || "Unknown Player"}</Heading>
+            <Heading size="xs" mb={2}>Active Offer from {players.find(p => p.id === tradeOffer.playerId)?.name || "Unknown Player"}</Heading>
             <VStack align="stretch" fontSize="sm">
                 <Text>Offering: {JSON.stringify(tradeOffer.offer)}</Text>
                 <Text>Requesting: {JSON.stringify(tradeOffer.request)}</Text>
@@ -201,9 +201,9 @@ export function Trading() {
                         <Button onClick={handleRejectTrade} isDisabled={!canTrade} size="xs" colorScheme="red">Reject</Button>
                     </HStack>
                 )}
-                 {currentPlayer === tradeOffer.playerId && (
-                      <Text fontSize="xs" color="gray.600">(Waiting for others)</Text>
-                 )}
+                {currentPlayer === tradeOffer.playerId && (
+                    <Text fontSize="xs" color="gray.600">(Waiting for others)</Text>
+                )}
             </VStack>
           </Box>
         )}
