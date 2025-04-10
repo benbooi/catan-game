@@ -247,4 +247,3 @@ function getTradeRatio(state: GameState, resource: ResourceType): number {
   // Implementation depends on port configuration
   return 4; // Default trade ratio
 } 
-} 
