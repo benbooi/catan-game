@@ -16,14 +16,20 @@ export function validateGameAction(state: GameState, action: GameAction): GameEr
       return validateBuyDevelopmentCard(state);
     case 'PLAY_DEVELOPMENT_CARD':
       return validatePlayDevelopmentCard(state, action.cardIndex);
-    case 'TRADE':
-      return validateTrade(state, action.offer, action.request);
+    case 'TRADE_BANK':
+      return validateBankTrade(state, action.give, action.receive);
+    case 'TRADE_OFFER':
+      return validateTradeOffer(state, action.offer, action.request);
+    case 'TRADE_ACCEPT':
+      return validateTradeAccept(state);
+    case 'TRADE_REJECT':
+      return null;
     case 'MOVE_ROBBER':
       return validateMoveRobber(state, action.hexId, action.targetPlayerId);
     case 'END_TURN':
       return null;
     default:
-      return { code: 'INVALID_ACTION', message: 'Unknown action type' };
+      return { code: 'INVALID_LOCATION', message: 'Unknown action type' };
   }
 }
 
@@ -145,13 +151,32 @@ function validatePlayDevelopmentCard(state: GameState, cardIndex: number): GameE
   const card = player.developmentCards[cardIndex];
   
   if (!card || card.used) {
-    return { code: 'INVALID_CARD', message: 'Invalid or already used development card' };
+    return { code: 'INVALID_LOCATION', message: 'Invalid or already used development card' };
   }
 
   return null;
 }
 
-function validateTrade(
+function validateBankTrade(
+  state: GameState, 
+  give: ResourceType, 
+  receive: ResourceType
+): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot trade during this phase' };
+  }
+
+  const player = state.players[state.currentPlayer];
+  const tradeRatio = getTradeRatio(state, give);
+  
+  if (player.resources[give] < tradeRatio) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources for bank trade' };
+  }
+
+  return null;
+}
+
+function validateTradeOffer(
   state: GameState, 
   offer: Record<ResourceType, number>, 
   request: Record<ResourceType, number>
@@ -167,6 +192,18 @@ function validateTrade(
     if (player.resources[resource as ResourceType] < amount) {
       return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to offer' };
     }
+  }
+
+  return null;
+}
+
+function validateTradeAccept(state: GameState): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot trade during this phase' };
+  }
+
+  if (!state.tradeOffer) {
+    return { code: 'INVALID_TRADE', message: 'No active trade offer' };
   }
 
   return null;
@@ -193,7 +230,7 @@ function validateMoveRobber(
     });
 
     if (!hasAdjacentBuildings) {
-      return { code: 'INVALID_TARGET', message: 'Target player has no buildings adjacent to this hex' };
+      return { code: 'INVALID_TRADE', message: 'Target player has no buildings adjacent to this hex' };
     }
   }
 
@@ -205,36 +242,41 @@ function getAdjacentVertices(vertexId: number): number[] {
   return [];
 }
 
+function getTradeRatio(state: GameState, resource: ResourceType): number {
+  // Implementation depends on port configuration
+  return 4; // Default trade ratio
+}
+
 export const gameValidator = {
   canRollDice: (state: GameState): boolean => {
     return state.phase === 'ROLL';
   },
 
   canBuildSettlement: (state: GameState, vertexId: number): boolean => {
-    const vertex = state.board.vertices.find(v => v.id === vertexId);
+    const vertex = state.board.vertices[vertexId];
     if (!vertex) return false;
 
     // Check if vertex is already occupied
     if (vertex.building) return false;
 
     // Check if adjacent vertices are occupied
-    const hasAdjacentSettlement = vertex.adjacentVertices.some(adjId => {
-      const adjVertex = state.board.vertices.find(v => v.id === adjId);
+    const hasAdjacentSettlement = getAdjacentVertices(vertexId).some(adjId => {
+      const adjVertex = state.board.vertices[adjId];
       return adjVertex?.building !== undefined;
     });
     if (hasAdjacentSettlement) return false;
 
     // In setup phase, check if player has a connected road
     if (state.setupPhase) {
-      const hasConnectedRoad = vertex.adjacentEdges.some(edgeId => {
-        const edge = state.board.edges.find(e => e.id === edgeId);
+      const hasConnectedRoad = getAdjacentEdges(vertexId).some(edgeId => {
+        const edge = state.board.edges[edgeId];
         return edge?.road?.playerId === state.currentPlayer;
       });
       if (!hasConnectedRoad) return false;
     }
 
     // Check if player has enough resources
-    const player = state.players.find(p => p.id === state.currentPlayer);
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
     return (
       player.resources.wood >= 1 &&
@@ -245,35 +287,35 @@ export const gameValidator = {
   },
 
   canBuildCity: (state: GameState, vertexId: number): boolean => {
-    const vertex = state.board.vertices.find(v => v.id === vertexId);
+    const vertex = state.board.vertices[vertexId];
     if (!vertex || !vertex.building || vertex.building.type !== 'settlement') return false;
     if (vertex.building.playerId !== state.currentPlayer) return false;
 
-    const player = state.players.find(p => p.id === state.currentPlayer);
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
     return player.resources.ore >= 3 && player.resources.grain >= 2;
   },
 
   canBuildRoad: (state: GameState, edgeId: number): boolean => {
-    const edge = state.board.edges.find(e => e.id === edgeId);
+    const edge = state.board.edges[edgeId];
     if (!edge || edge.road) return false;
 
     // Check if player has enough resources
-    const player = state.players.find(p => p.id === state.currentPlayer);
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
     if (player.resources.wood < 1 || player.resources.brick < 1) return false;
 
     // Check if road connects to existing road or settlement
     const hasValidConnection = edge.vertices.some(vertexId => {
-      const vertex = state.board.vertices.find(v => v.id === vertexId);
+      const vertex = state.board.vertices[vertexId];
       if (!vertex) return false;
 
       // Check if vertex has player's settlement
       if (vertex.building?.playerId === state.currentPlayer) return true;
 
       // Check if vertex has player's road
-      return vertex.adjacentEdges.some(adjEdgeId => {
-        const adjEdge = state.board.edges.find(e => e.id === adjEdgeId);
+      return getAdjacentEdges(vertexId).some(adjEdgeId => {
+        const adjEdge = state.board.edges[adjEdgeId];
         return adjEdge?.road?.playerId === state.currentPlayer;
       });
     });
@@ -282,7 +324,7 @@ export const gameValidator = {
   },
 
   canBuyDevelopmentCard: (state: GameState): boolean => {
-    const player = state.players.find(p => p.id === state.currentPlayer);
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
     return (
       player.resources.ore >= 1 &&
@@ -292,7 +334,7 @@ export const gameValidator = {
   },
 
   canPlayDevelopmentCard: (state: GameState, cardType: string): boolean => {
-    const player = state.players.find(p => p.id === state.currentPlayer);
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
 
     const card = player.developmentCards.find(c => c.type === cardType && !c.used);
@@ -308,14 +350,14 @@ export const gameValidator = {
     return false;
   },
 
-  canBankTrade: (state: GameState, give: ResourceType, want: ResourceType): boolean => {
-    const player = state.players.find(p => p.id === state.currentPlayer);
+  canBankTrade: (state: GameState, give: ResourceType): boolean => {
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
     return player.resources[give] >= 1;
   },
 
-  canOfferTrade: (state: GameState, give: Partial<Record<ResourceType, number>>, want: Partial<Record<ResourceType, number>>): boolean => {
-    const player = state.players.find(p => p.id === state.currentPlayer);
+  canOfferTrade: (state: GameState, give: Partial<Record<ResourceType, number>>): boolean => {
+    const player = state.players[state.currentPlayer];
     if (!player) return false;
 
     // Check if player has enough resources to give
@@ -329,11 +371,11 @@ export const gameValidator = {
   },
 
   canMoveRobber: (state: GameState, hexId: number, targetPlayerId: string): boolean => {
-    const hex = state.board.hexes.find(h => h.id === hexId);
+    const hex = state.board.hexes[hexId];
     if (!hex) return false;
 
     // Check if target player has resources
-    const targetPlayer = state.players.find(p => p.id === targetPlayerId);
+    const targetPlayer = state.players[targetPlayerId];
     if (!targetPlayer) return false;
 
     return Object.values(targetPlayer.resources).some(count => count > 0);

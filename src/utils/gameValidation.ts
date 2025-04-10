@@ -3,47 +3,54 @@ import { ResourceType, Player, Vertex, Edge } from '../types/game';
 import { ValidationResult } from '../types/gameLogic';
 import { DEFAULT_GAME_RULES, DEFAULT_BUILD_COSTS } from '../constants/gameConstants';
 
-export function validateGameAction(state: GameState, action: GameAction): ValidationResult {
+export function validateGameAction(state: GameState, action: GameAction): GameError | null {
   switch (action.type) {
     case 'ROLL_DICE':
       return validateRollDice(state);
     case 'BUILD_SETTLEMENT':
-      return validateBuildSettlement(state, action.vertex);
+      return validateBuildSettlement(state, action.vertexId);
     case 'BUILD_CITY':
-      return validateBuildCity(state, action.vertex);
+      return validateBuildCity(state, action.vertexId);
     case 'BUILD_ROAD':
-      return validateBuildRoad(state, action.edge);
+      return validateBuildRoad(state, action.edgeId);
     case 'BUY_DEVELOPMENT_CARD':
       return validateBuyDevelopmentCard(state);
     case 'PLAY_DEVELOPMENT_CARD':
-      return validatePlayDevelopmentCard(state, action.card);
+      return validatePlayDevelopmentCard(state, action.cardIndex);
     case 'TRADE_BANK':
       return validateBankTrade(state, action.give, action.receive);
-    case 'TRADE_PLAYER':
-      return validatePlayerTrade(state, action.give, action.receive, action.targetPlayer);
+    case 'TRADE_OFFER':
+      return validateTradeOffer(state, action.offer, action.request);
+    case 'TRADE_ACCEPT':
+      return validateTradeAccept(state);
+    case 'TRADE_REJECT':
+      return null;
     case 'MOVE_ROBBER':
-      return validateMoveRobber(state, action.hex, action.targetPlayer);
+      return validateMoveRobber(state, action.hexId, action.targetPlayerId);
     case 'END_TURN':
-      return validateEndTurn(state);
+      return null;
     default:
-      return { valid: false, error: { code: 'INVALID_ACTION', message: 'Invalid action type' } };
+      return { code: 'INVALID_LOCATION', message: 'Unknown action type' };
   }
 }
 
-function validateRollDice(state: GameState): ValidationResult {
+function validateRollDice(state: GameState): GameError | null {
   if (state.phase !== 'ROLL') {
-    return { valid: false, error: { code: 'WRONG_PHASE', message: 'Can only roll dice during roll phase' } };
+    return { code: 'INVALID_PHASE', message: 'Must roll dice first' };
   }
-  return { valid: true };
+  return null;
 }
 
-function validateBuildSettlement(state: GameState, vertexId: number): boolean {
+function validateBuildSettlement(state: GameState, vertexId: number): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot build during this phase' };
+  }
+
   const player = state.players[state.currentPlayer];
   const vertex = state.board.vertices[vertexId];
   
-  // Check if vertex is empty
   if (vertex.building) {
-    return false;
+    return { code: 'INVALID_LOCATION', message: 'Vertex is occupied' };
   }
 
   // Check distance rule
@@ -51,49 +58,55 @@ function validateBuildSettlement(state: GameState, vertexId: number): boolean {
   for (const adjVertexId of adjacentVertices) {
     const adjVertex = state.board.vertices[adjVertexId];
     if (adjVertex.building) {
-      return false;
+      return { code: 'INVALID_LOCATION', message: 'Too close to another settlement' };
     }
   }
 
   // Check resources
-  const hasResources = 
-    player.resources.wood >= 1 &&
-    player.resources.brick >= 1 &&
-    player.resources.wool >= 1 &&
-    player.resources.grain >= 1;
+  if (player.resources.wood < 1 || 
+      player.resources.brick < 1 || 
+      player.resources.wool < 1 || 
+      player.resources.grain < 1) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to build settlement' };
+  }
 
-  return hasResources;
+  return null;
 }
 
-function validateBuildCity(state: GameState, vertexId: number): boolean {
+function validateBuildCity(state: GameState, vertexId: number): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot build during this phase' };
+  }
+
   const player = state.players[state.currentPlayer];
   const vertex = state.board.vertices[vertexId];
   
-  // Check if vertex has a settlement belonging to the player
   if (!vertex.building || 
       vertex.building.type !== 'settlement' || 
       vertex.building.playerId !== player.id) {
-    return false;
+    return { code: 'INVALID_LOCATION', message: 'Must upgrade your own settlement' };
   }
 
-  // Check resources
-  const hasResources = 
-    player.resources.grain >= 2 &&
-    player.resources.ore >= 3;
+  if (player.resources.grain < 2 || player.resources.ore < 3) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to build city' };
+  }
 
-  return hasResources;
+  return null;
 }
 
-function validateBuildRoad(state: GameState, edgeId: number): boolean {
+function validateBuildRoad(state: GameState, edgeId: number): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot build during this phase' };
+  }
+
   const player = state.players[state.currentPlayer];
   const edge = state.board.edges[edgeId];
   
-  // Check if edge is empty
   if (edge.road) {
-    return false;
+    return { code: 'INVALID_LOCATION', message: 'Edge is occupied' };
   }
 
-  // Check if connected to settlement/city or another road
+  // Check connection to settlement/city or another road
   const [vertex1, vertex2] = edge.vertices;
   const hasConnection = 
     (state.board.vertices[vertex1].building?.playerId === player.id) ||
@@ -104,80 +117,112 @@ function validateBuildRoad(state: GameState, edgeId: number): boolean {
     );
 
   if (!hasConnection) {
-    return false;
+    return { code: 'INVALID_LOCATION', message: 'Road must connect to settlement/city or another road' };
   }
 
-  // Check resources
-  const hasResources = 
-    player.resources.wood >= 1 &&
-    player.resources.brick >= 1;
+  if (player.resources.wood < 1 || player.resources.brick < 1) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to build road' };
+  }
 
-  return hasResources;
+  return null;
 }
 
-function validateBuyDevelopmentCard(state: GameState): boolean {
+function validateBuyDevelopmentCard(state: GameState): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot buy during this phase' };
+  }
+
   const player = state.players[state.currentPlayer];
   
-  // Check resources
-  const hasResources = 
-    player.resources.ore >= 1 &&
-    player.resources.wool >= 1 &&
-    player.resources.grain >= 1;
+  if (player.resources.ore < 1 || 
+      player.resources.wool < 1 || 
+      player.resources.grain < 1) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to buy development card' };
+  }
 
-  return hasResources;
+  return null;
 }
 
-function validatePlayDevelopmentCard(state: GameState, cardIndex: number): boolean {
+function validatePlayDevelopmentCard(state: GameState, cardIndex: number): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot play card during this phase' };
+  }
+
   const player = state.players[state.currentPlayer];
   const card = player.developmentCards[cardIndex];
   
-  // Check if card exists and hasn't been used this turn
   if (!card || card.used) {
-    return false;
+    return { code: 'INVALID_LOCATION', message: 'Invalid or already used development card' };
   }
 
-  return true;
+  return null;
 }
 
-function validateBankTrade(state: GameState, give: ResourceType, receive: ResourceType): ValidationResult {
-  const currentPlayer = state.players[state.currentPlayer];
+function validateBankTrade(
+  state: GameState, 
+  give: ResourceType, 
+  receive: ResourceType
+): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot trade during this phase' };
+  }
+
+  const player = state.players[state.currentPlayer];
   const tradeRatio = getTradeRatio(state, give);
   
-  if (currentPlayer.resources[give] < tradeRatio) {
-    return { valid: false, error: { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources for bank trade' } };
+  if (player.resources[give] < tradeRatio) {
+    return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources for bank trade' };
   }
 
-  return { valid: true };
+  return null;
 }
 
-function validatePlayerTrade(
+function validateTradeOffer(
   state: GameState, 
-  give: Record<ResourceType, number>, 
-  receive: Record<ResourceType, number>, 
-  targetPlayer: string
-): ValidationResult {
-  const currentPlayer = state.players[state.currentPlayer];
-  const tradingPartner = state.players[targetPlayer];
-  
-  // Check if players have sufficient resources
-  if (!hasResources(currentPlayer, give)) {
-    return { valid: false, error: { code: 'INSUFFICIENT_RESOURCES', message: 'Offering player lacks required resources' } };
-  }
-  
-  if (!hasResources(tradingPartner, receive)) {
-    return { valid: false, error: { code: 'INSUFFICIENT_RESOURCES', message: 'Target player lacks required resources' } };
+  offer: Record<ResourceType, number>, 
+  request: Record<ResourceType, number>
+): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot trade during this phase' };
   }
 
-  return { valid: true };
+  const player = state.players[state.currentPlayer];
+  
+  // Check if player has enough resources to offer
+  for (const [resource, amount] of Object.entries(offer)) {
+    if (player.resources[resource as ResourceType] < amount) {
+      return { code: 'INSUFFICIENT_RESOURCES', message: 'Not enough resources to offer' };
+    }
+  }
+
+  return null;
 }
 
-function validateMoveRobber(state: GameState, hexId: number, targetPlayerId?: string): boolean {
-  // Check if hex exists and is not current robber location
-  if (hexId === state.board.robberHex) {
-    return false;
+function validateTradeAccept(state: GameState): GameError | null {
+  if (state.phase !== 'MAIN') {
+    return { code: 'INVALID_PHASE', message: 'Cannot trade during this phase' };
   }
 
-  // If targeting a player, check if they have settlements/cities adjacent to the hex
+  if (!state.tradeOffer) {
+    return { code: 'INVALID_TRADE', message: 'No active trade offer' };
+  }
+
+  return null;
+}
+
+function validateMoveRobber(
+  state: GameState, 
+  hexId: number, 
+  targetPlayerId?: string
+): GameError | null {
+  if (state.phase !== 'ROBBER') {
+    return { code: 'INVALID_PHASE', message: 'Must move robber during robber phase' };
+  }
+
+  if (hexId === state.board.robber.hexId) {
+    return { code: 'INVALID_LOCATION', message: 'Must move robber to a new location' };
+  }
+
   if (targetPlayerId) {
     const hex = state.board.hexes[hexId];
     const hasAdjacentBuildings = hex.vertices.some(vertexId => {
@@ -186,25 +231,11 @@ function validateMoveRobber(state: GameState, hexId: number, targetPlayerId?: st
     });
 
     if (!hasAdjacentBuildings) {
-      return false;
+      return { code: 'INVALID_TRADE', message: 'Target player has no buildings adjacent to this hex' };
     }
   }
 
-  return true;
-}
-
-function validateEndTurn(state: GameState): ValidationResult {
-  if (state.phase === 'ROLL') {
-    return { valid: false, error: { code: 'WRONG_PHASE', message: 'Must roll dice before ending turn' } };
-  }
-  return { valid: true };
-}
-
-// Helper functions
-function hasResources(player: Player, cost: Record<ResourceType, number>): boolean {
-  return Object.entries(cost).every(([resource, amount]) => 
-    player.resources[resource as ResourceType] >= amount
-  );
+  return null;
 }
 
 function getAdjacentVertices(vertexId: number): number[] {
@@ -212,17 +243,8 @@ function getAdjacentVertices(vertexId: number): number[] {
   return [];
 }
 
-function getAdjacentEdges(vertexId: number): number[] {
-  // Implementation needed
-  return [];
-}
-
-function getAdjacentHexes(vertexId: number): number[] {
-  // Implementation needed
-  return [];
-}
-
 function getTradeRatio(state: GameState, resource: ResourceType): number {
   // Implementation depends on port configuration
   return 4; // Default trade ratio
+} 
 } 
