@@ -1,35 +1,39 @@
-import { ChakraProvider, Box, VStack, Button, Text, HStack } from '@chakra-ui/react';
+import { Box, Button, Grid, HStack, Text, VStack } from '@chakra-ui/react';
 import { GameBoard } from './components/GameBoard';
+import { PlayerPanel } from './components/PlayerPanel';
+import { DevelopmentCards } from './components/DevelopmentCards';
+import { Trading } from './components/Trading';
 import { useGameStore } from './store/gameStore';
 
 function App() {
-  const { currentPlayer, players, dice, rollDice, endTurn } = useGameStore();
+  const { startGame } = useGameStore();
 
   return (
-    <ChakraProvider>
-      <Box minH="100vh" bg="gray.50" py={8}>
-        <VStack gap={8}>
-          <Text fontSize="2xl" fontWeight="bold">
-            Catan
-          </Text>
-          
-          <HStack gap={4}>
-            <Text>Current Player: {players[currentPlayer].name}</Text>
-            <Button onClick={rollDice} colorScheme="blue">
-              Roll Dice
-            </Button>
-            <Text>
-              Last Roll: {dice.lastRoll ? `${dice.lastRoll[0]} + ${dice.lastRoll[1]}` : 'Not rolled'}
-            </Text>
-            <Button onClick={endTurn} colorScheme="green">
-              End Turn
-            </Button>
-          </HStack>
+    <Box p={8}>
+      <VStack spacing={8} align="stretch">
+        <HStack justify="space-between" align="center">
+          <Text fontSize="3xl" fontWeight="bold">Catan</Text>
+          <Button
+            colorScheme="green"
+            onClick={() => startGame(4)}
+          >
+            New Game
+          </Button>
+        </HStack>
 
-          <GameBoard />
-        </VStack>
-      </Box>
-    </ChakraProvider>
+        <Grid templateColumns="1fr auto" gap={8}>
+          <Box>
+            <GameBoard />
+          </Box>
+          
+          <VStack spacing={8} minW="300px">
+            <PlayerPanel />
+            <DevelopmentCards />
+            <Trading />
+          </VStack>
+        </Grid>
+      </VStack>
+    </Box>
   );
 }
 
