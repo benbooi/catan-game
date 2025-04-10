@@ -1,6 +1,5 @@
-import { GameState, GameAction /*, GameError */ } from '../types/gameState'; // Removed unused GameError
-import { Player, ResourceType /*, DevelopmentCardType */ } from '../types/game'; // Removed unused DevelopmentCardType
-import { gameValidator } from '../validators/gameValidator';
+import { GameState, GameAction } from '../types/gameState';
+import { Player, Hex, Vertex, Edge, GamePhase } from '../types/game';
 
 // --- Helper Functions (potentially move to utils) ---
 
@@ -117,24 +116,56 @@ function nextPlayer(state: GameState): string {
     return playerIds[nextIndex];
 }
 
+function completeSetup(state: GameState): GameState {
+     if (!state.setupPhase) {
+         console.warn("Attempted to complete setup when not in setup phase");
+         return state;
+     }
+     
+     // Check if all initial placements are done (2 settlements and 2 roads per player)
+     const numPlayers = state.players.length;
+     const totalSettlements = 2 * numPlayers;
+     const totalRoads = 2 * numPlayers;
+     
+     // Count settlements and roads placed
+     let settlementsPlaced = 0;
+     let roadsPlaced = 0;
+     
+     state.board.vertices.forEach(v => {
+         if (v.building) settlementsPlaced++;
+     });
+     
+     state.board.edges.forEach(e => {
+         if (e.road) roadsPlaced++;
+     });
+     
+     if (settlementsPlaced < totalSettlements || roadsPlaced < totalRoads) {
+         console.warn("Setup not completed - not all pieces placed");
+         return state;
+     }
+     
+     // Setup is complete, transition to normal gameplay
+     let nextSetupPhase = {
+       round: 0,
+       direction: 'forward' as const,
+       settlementsPlaced: 0,
+       roadsPlaced: 0
+     };
+     
+     return {
+         ...state,
+         phase: 'ROLL' as GamePhase, // First player starts with rolling
+         setupPhase: nextSetupPhase
+     };
+}
+
 // --- Main Reducer --- 
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   // Always return a new state object, don't mutate the original state
   switch (action.type) {
     case 'ROLL_DICE': {
-      const dice1 = Math.floor(Math.random() * 6) + 1;
-      const dice2 = Math.floor(Math.random() * 6) + 1;
-      const roll = dice1 + dice2;
-      const newState = {
-        ...state,
-        diceRoll: roll,
-        diceRolled: true,
-        phase: roll === 7 ? 'ROBBER' : 'MAIN', // Move to ROBBER on 7, else MAIN
-        mustMoveRobber: roll === 7, // Set flag if 7 rolled
-      };
-      // Only distribute resources if not a 7
-      return roll === 7 ? newState : distributeResources(newState, roll);
+      return rollDice(state);
     }
 
      case 'MOVE_ROBBER': {
@@ -499,16 +530,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         
         // Determine trade ratio (4:1 default, can be improved by ports)
         const ratio = getTradeRatio(state, state.currentPlayer, give);
-        const loss = { [give]: ratio };
-        const gain = { [receive]: 1 };
         
         // Check if player has enough resources
-        if (player.resources[give] < ratio) return state;
+        if (player.resources[give] < ratio) {
+            console.warn(`Player doesn't have enough ${give} for trade`);
+            return state;
+        }
         
         // Apply the trade
         const newResources = { ...player.resources };
-        newResources[give] = newResources[give] - ratio;
-        newResources[receive] = (newResources[receive] || 0) + gain[receive];
+        newResources[give] -= ratio;
+        newResources[receive] += 1;
         
         const updatedPlayers = [...state.players];
         updatedPlayers[playerIndex] = { ...player, resources: newResources };
@@ -660,20 +692,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   }
 }
 
-// Helper function to check if a player has enough resources for a cost
-function hasEnoughResources(
-    playerResources: Record<ResourceType, number>,
-    cost: Partial<Record<ResourceType, number>>
-): boolean {
-    for (const resource in cost) {
-        const resourceType = resource as ResourceType;
-        if ((playerResources[resourceType] || 0) < (cost[resourceType] || 0)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 // Helper function to get trade ratio for a resource based on ports
 function getTradeRatio(state: GameState, playerId: string, resource: ResourceType): number {
   const player = state.players.find(p => p.id === playerId);
@@ -695,4 +713,172 @@ function getTradeRatio(state: GameState, playerId: string, resource: ResourceTyp
   });
   
   return minRatio;
+}
+
+function rollDice(state: GameState): GameState {
+    if (state.phase !== 'ROLL') {
+      console.warn('Attempted to roll dice outside of ROLL phase');
+      return state; 
+    }
+    
+    if (state.diceRolled) {
+      console.warn('Dice already rolled this turn');
+      return state;
+    }
+    
+    // Basic dice roll: 2d6
+    const die1 = Math.floor(Math.random() * 6) + 1;
+    const die2 = Math.floor(Math.random() * 6) + 1;
+    const roll = die1 + die2;
+    
+    // Create a new state with updated dice roll
+    const newState: GameState = {
+      ...state,
+      diceRoll: roll,
+      diceRolled: true,
+      // If a 7 is rolled, move to robber phase, otherwise main phase
+      phase: roll === 7 ? 'ROBBER' as GamePhase : 'MAIN' as GamePhase,
+      // Set robber flag for 7s - this will trigger discard UI
+      mustMoveRobber: roll === 7
+    };
+    
+    return roll === 7 ? newState : distributeResources(newState, roll);
+  } 
+
+function buildSettlement(state: GameState, vertexId: number): GameState {
+  // Find the player
+  const currentPlayer = state.players.find(p => p.id === state.currentPlayer);
+  if (!currentPlayer) return state;
+  
+  // Find the vertex
+  const vertex = state.board.vertices.find(v => v.id === vertexId);
+  if (!vertex) return state;
+  
+  // Check if already occupied
+  if (vertex.building) return state;
+  
+  // Handle resource cost if not in setup phase
+  let updatedPlayer = currentPlayer;
+  if (state.phase !== 'SETUP') {
+    // Check if player has enough resources
+    const cost = { wood: 1, brick: 1, grain: 1, wool: 1 };
+    for (const [resource, amount] of Object.entries(cost)) {
+      if ((currentPlayer.resources[resource] || 0) < amount) {
+        console.warn(`Insufficient ${resource} for settlement`);
+        return state;
+      }
+    }
+    
+    // Deduct resources
+    const newResources = { ...currentPlayer.resources };
+    for (const [resource, amount] of Object.entries(cost)) {
+      newResources[resource] -= amount;
+    }
+    
+    updatedPlayer = { 
+      ...currentPlayer, 
+      resources: newResources 
+    };
+  }
+  
+  // Create the settlement
+  const updatedVertex = {
+    ...vertex,
+    building: {
+      type: 'settlement',
+      playerId: state.currentPlayer
+    }
+  };
+  
+  // Update the board vertices
+  const updatedVertices = state.board.vertices.map(v => 
+    v.id === vertexId ? updatedVertex : v
+  );
+  
+  // Update the players array
+  const updatedPlayers = state.players.map(p => 
+    p.id === state.currentPlayer ? updatedPlayer : p
+  );
+  
+  // Update the board
+  const updatedBoard = {
+    ...state.board,
+    vertices: updatedVertices
+  };
+  
+  return {
+    ...state,
+    board: updatedBoard,
+    players: updatedPlayers
+  };
+}
+
+function buildCity(state: GameState, vertexId: number): GameState {
+  // Find the player
+  const currentPlayer = state.players.find(p => p.id === state.currentPlayer);
+  if (!currentPlayer) return state;
+  
+  // Find the vertex
+  const vertex = state.board.vertices.find(v => v.id === vertexId);
+  if (!vertex) return state;
+  
+  // Check if there's a settlement owned by this player
+  if (!vertex.building || 
+      vertex.building.type !== 'settlement' || 
+      vertex.building.playerId !== state.currentPlayer) {
+    console.warn('Cannot build city - no settlement at this location');
+    return state;
+  }
+  
+  // Check if player has enough resources
+  const cost = { grain: 2, ore: 3 };
+  for (const [resource, amount] of Object.entries(cost)) {
+    if ((currentPlayer.resources[resource] || 0) < amount) {
+      console.warn(`Insufficient ${resource} for city`);
+      return state;
+    }
+  }
+  
+  // Deduct resources
+  const newResources = { ...currentPlayer.resources };
+  for (const [resource, amount] of Object.entries(cost)) {
+    newResources[resource] -= amount;
+  }
+  
+  // Update the player
+  const updatedPlayer = { 
+    ...currentPlayer, 
+    resources: newResources 
+  };
+  
+  // Create the city
+  const updatedVertex = {
+    ...vertex,
+    building: {
+      type: 'city',
+      playerId: state.currentPlayer
+    }
+  };
+  
+  // Update the board vertices
+  const updatedVertices = state.board.vertices.map(v => 
+    v.id === vertexId ? updatedVertex : v
+  );
+  
+  // Update the players array
+  const updatedPlayers = state.players.map(p => 
+    p.id === state.currentPlayer ? updatedPlayer : p
+  );
+  
+  // Update the board
+  const updatedBoard = {
+    ...state.board,
+    vertices: updatedVertices
+  };
+  
+  return {
+    ...state,
+    board: updatedBoard,
+    players: updatedPlayers
+  };
 } 

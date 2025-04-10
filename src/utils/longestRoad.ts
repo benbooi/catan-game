@@ -1,9 +1,5 @@
 import { GameState } from '../types/gameState';
-
-interface RoadNetwork {
-  edges: number[];
-  length: number;
-}
+import { Edge } from '../types/game';
 
 export function calculateLongestRoad(state: GameState): {
   playerId: string | null;
@@ -13,10 +9,11 @@ export function calculateLongestRoad(state: GameState): {
   let maxLength = state.longestRoad.length; // Start with current length
 
   // Iterate through each player to check their longest road
-  for (const playerId in state.players) {
-    const playerEdges = Object.entries(state.board.edges)
-        .filter(([_, edge]) => edge.road?.playerId === playerId)
-        .map(([id, _]) => Number(id));
+  for (const player of state.players) {
+    const playerId = player.id;
+    const playerEdges = state.board.edges
+        .filter(edge => edge.road?.playerId === playerId)
+        .map(edge => edge.id);
 
     if (playerEdges.length === 0) continue;
 
@@ -44,9 +41,9 @@ export function calculateLongestRoad(state: GameState): {
   // This requires recalculating the original holder's current max length.
   if (state.longestRoad.playerId && state.longestRoad.playerId !== longestRoadPlayer) {
       const originalHolderId = state.longestRoad.playerId;
-      const originalHolderEdges = Object.entries(state.board.edges)
-        .filter(([_, edge]) => edge.road?.playerId === originalHolderId)
-        .map(([id, _]) => Number(id));
+      const originalHolderEdges = state.board.edges
+        .filter(edge => edge.road?.playerId === originalHolderId)
+        .map(edge => edge.id);
       
       let originalHolderMaxLength = 0;
       const visitedOriginalHolderEdges = new Set<number>();
@@ -84,7 +81,7 @@ export function calculateLongestRoad(state: GameState): {
 function findLongestPathFromEdge(
     startEdgeId: number,
     playerId: string,
-    allEdges: Record<number, Edge>,
+    allEdges: Edge[],
     globallyVisited: Set<number> // Keep track of edges visited across all starting points for efficiency
 ): number {
     let maxLength = 0;
@@ -114,84 +111,25 @@ function findLongestPathFromEdge(
 function getConnectedNeighborEdges(
     edgeId: number,
     playerId: string,
-    allEdges: Record<number, Edge>
+    allEdges: Edge[]
 ): number[] {
-    const edge = allEdges[edgeId];
+    const edge = allEdges.find(e => e.id === edgeId);
     if (!edge || edge.road?.playerId !== playerId) return [];
 
     const neighbors: number[] = [];
     const [v1, v2] = edge.vertices;
 
     // Find other edges connected to v1 or v2 owned by the same player
-    for (const otherEdgeIdStr in allEdges) {
-        const otherEdgeId = Number(otherEdgeIdStr);
-        if (otherEdgeId === edgeId) continue;
+    for (const otherEdge of allEdges) {
+        if (otherEdge.id === edgeId) continue;
 
-        const otherEdge = allEdges[otherEdgeId];
         if (otherEdge.road?.playerId === playerId) {
             // Check if the other edge shares a vertex, but ignore the vertex connecting back to the current edge if it's an endpoint in path
             // This simple adjacency check is okay for basic longest road calculation
             if (otherEdge.vertices.includes(v1) || otherEdge.vertices.includes(v2)) {
-                neighbors.push(otherEdgeId);
+                neighbors.push(otherEdge.id);
             }
         }
     }
     return neighbors;
-}
-
-function findConnectedRoads(
-  state: GameState,
-  startEdge: number,
-  playerId: string,
-  visited: Set<number>
-): number[] {
-  const connected: number[] = [];
-  const edge = state.board.edges[startEdge];
-  
-  if (!edge.road || edge.road.playerId !== playerId) {
-    return connected;
-  }
-
-  visited.add(startEdge);
-  connected.push(startEdge);
-
-  // Find adjacent edges through vertices
-  const [vertex1, vertex2] = edge.vertices;
-  const adjacentEdges = [
-    ...getAdjacentEdges(vertex1),
-    ...getAdjacentEdges(vertex2)
-  ].filter(id => !visited.has(id));
-
-  for (const adjEdgeId of adjacentEdges) {
-    const adjEdge = state.board.edges[adjEdgeId];
-    if (adjEdge.road?.playerId === playerId) {
-      connected.push(...findConnectedRoads(state, adjEdgeId, playerId, visited));
-    }
-  }
-
-  return connected;
-}
-
-// Placeholder - Actual implementation needed to find adjacent edges for road connection
-function getAdjacentEdges(edgeId: number, allEdges: Edge[]): number[] {
-  const edge = allEdges[edgeId];
-  if (!edge) return [];
-
-  const adjacent: number[] = [];
-  const [v1, v2] = edge.vertices;
-
-  allEdges.forEach((otherEdge, otherEdgeId) => {
-    if (edgeId === otherEdgeId || !otherEdge.road || otherEdge.road.playerId !== edge.road?.playerId) return;
-    if (otherEdge.vertices.includes(v1) || otherEdge.vertices.includes(v2)) {
-      adjacent.push(otherEdgeId);
-    }
-  });
-
-  return adjacent;
-}
-
-interface RoadSegment {
-  playerId: string;
-  edges: Set<number>;
-  length: number;
 } 

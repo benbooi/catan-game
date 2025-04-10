@@ -1,103 +1,214 @@
-import { Box, Grid, HStack, Text, VStack, Badge, Button, Heading, Divider, Flex } from '@chakra-ui/react';
-import { useGameStore } from '../store/gameStore';
+import { Box, Flex, Text, HStack, VStack, Grid, Badge, Button, Heading, Divider } from '@chakra-ui/react';
+import { FaWood, FaBrick, FaGrain, FaWool, FaMountain } from 'react-icons/fa';
+import { GiWoodPile, GiBrickWall, GiWheat, GiWool, GiMining, GiSwordman, GiRoad, GiShield } from 'react-icons/gi';
+import { useGameStore } from '../hooks/useGameStore';
 import { ResourceType, Player } from '../types/game';
-import { GameState } from '../types/gameState';
+import { PLAYER_COLORS } from '../utils/theme';
+import { isAIPlayer } from '../utils/aiPlayer';
 
+// Resource icons mapping
+const RESOURCE_ICONS = {
+  wood: GiWoodPile,
+  brick: GiBrickWall,
+  grain: GiWheat,
+  wool: GiWool,
+  ore: GiMining,
+};
+
+// Resource colors
 const RESOURCE_COLORS = {
-  brick: '#E57373',
-  lumber: '#81C784',
-  ore: '#90A4AE',
-  grain: '#FDD835',
-  wool: '#A5D6A7',
+  wood: 'green.600',
+  brick: 'red.600',
+  grain: 'yellow.500',
+  wool: 'green.300',
+  ore: 'gray.600',
 };
 
-// Map ResourceType to a color
-const resourceInfo: Record<ResourceType, { color: string }> = {
-  wood: { color: 'green.500' },
-  brick: { color: 'red.500' },
-  ore: { color: 'gray.500' },
-  grain: { color: 'yellow.400' },
-  wool: { color: 'gray.200' },
-};
-
-// Function to get player stats
-const getPlayerStats = (player: Player | undefined, board: GameState['board']) => {
-   if (!player) return { settlements: 0, cities: 0, roads: 0, armySize: 0, vp: 0 };
-   
-   const settlements = Object.values(board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'settlement').length;
-   const cities = Object.values(board.vertices).filter(v => v.building?.playerId === player.id && v.building.type === 'city').length;
-   const roads = Object.values(board.edges).filter(e => e.road?.playerId === player.id).length;
-   const armySize = player.knightsPlayed || 0;
-   const vp = player.score;
-   
-   return { settlements, cities, roads, armySize, vp };
-}
-
-export function PlayerPanel() {
-  const { players, currentPlayer, longestRoad, largestArmy, phase, turnNumber, setupPhase, winner, board } = useGameStore(state => ({ 
-      players: state.players, 
-      currentPlayer: state.currentPlayer,
-      longestRoad: state.longestRoad,
-      largestArmy: state.largestArmy,
-      phase: state.phase,
-      turnNumber: state.turnNumber,
-      setupPhase: state.setupPhase,
-      winner: state.winner,
-      board: state.board
-  }));
+const ResourceCounter = ({ type, count, showZero = false }: { type: ResourceType; count: number; showZero?: boolean }) => {
+  if (count === 0 && !showZero) return null;
   
-  const dispatch = useGameStore(state => state.dispatch);
-  const playerIds = players.map(p => p.id);
-
-  const handleRollDice = () => {
-    dispatch({ type: 'ROLL_DICE' });
-  };
-
-  const handleEndTurn = () => {
-    dispatch({ type: 'END_TURN' });
-  };
-
+  const Icon = RESOURCE_ICONS[type];
+  
   return (
-    <Box p={4} borderWidth="1px" borderRadius="lg" height="100%">
-      <Heading size="md" mb={4}>Players</Heading>
-      <VStack spacing={4} align="stretch">
-         <Text fontSize="sm">Turn: {turnNumber} - Phase: {phase} {setupPhase ? `(Setup Round ${setupPhase.round})`: ''}</Text>
-         {winner && <Text color="green.500" fontWeight="bold">Winner: {players.find(p => p.id === winner)?.name}</Text>}
-        {players.map(player => {
-          const isCurrent = player.id === currentPlayer;
-          const stats = getPlayerStats(player, board);
-          
-          return (
-            <Box key={player.id} p={3} borderWidth="2px" borderColor={isCurrent ? player.color || 'blue.500' : 'gray.200'} borderRadius="md">
-              <Flex justify="space-between" align="center" mb={2}>
-                 <Heading size="sm" color={player.color || 'black'}>{player.name} {isCurrent ? '(Current)' : ''}</Heading>
-                 <Flex align="center">
-                    <Text fontWeight="bold">{stats.vp} VP</Text>
-                 </Flex>
-              </Flex>
-              <Divider my={2} />
-              <Text fontSize="sm" mb={1}>Resources:</Text>
-              <Flex wrap="wrap" gap={2} mb={2}>
-                {(Object.keys(resourceInfo) as ResourceType[]).map(resource => (
-                  <Flex key={resource} align="center" p={1} bg="gray.50" borderRadius="sm">
-                     <Box w="10px" h="10px" borderRadius="full" bg={resourceInfo[resource].color} mr={1}></Box>
-                     <Text fontSize="xs">{resource}: {player.resources[resource]}</Text>
-                  </Flex>
-                ))}
-              </Flex>
-              <Text fontSize="sm" mb={1}>Stats:</Text>
-               <Flex wrap="wrap" gap={2} fontSize="xs">
-                   <Flex align="center">Roads: {stats.roads}</Flex>
-                   <Flex align="center">Settlements: {stats.settlements}</Flex>
-                   <Flex align="center">Cities: {stats.cities}</Flex>
-                   <Flex align="center">Army: {stats.armySize} {player.id === largestArmy.playerId ? '(Largest)' : ''}</Flex>
-                   {player.id === longestRoad.playerId && <Flex align="center" color="orange.400">Longest Road</Flex>}
-               </Flex>
-               <Text fontSize="sm" mt={2}>Dev Cards: {player.developmentCards.length}</Text>
-            </Box>
-          );
-        })}
-      </VStack>
+    <HStack spacing={1} bg="white" px={2} py={1} borderRadius="md" shadow="sm">
+      <Icon color={RESOURCE_COLORS[type]} />
+      <Text fontSize="sm" fontWeight="medium">
+        {count}
+      </Text>
+    </HStack>
+  );
+};
+
+const PlayerCard = ({ player, isActive, isHuman }: { player: Player; isActive: boolean; isHuman: boolean }) => {
+  return (
+    <Box 
+      p={3} 
+      borderWidth="2px" 
+      borderColor={isActive ? PLAYER_COLORS[player.color] : 'gray.200'} 
+      borderRadius="md"
+      bg={isActive ? `${PLAYER_COLORS[player.color]}10` : 'white'}
+      transition="all 0.2s"
+    >
+      <Flex justify="space-between" align="center" mb={2}>
+        <Heading size="sm" color={PLAYER_COLORS[player.color]}>
+          {player.name} {isActive && <Badge colorScheme="green">Active</Badge>}
+        </Heading>
+        <HStack>
+          <Text fontWeight="bold">{player.score} VP</Text>
+          {isAIPlayer(player.name) && (
+            <Badge colorScheme={
+              player.name.includes('Beginner') || player.name.includes('Newbie') ? 'green' :
+              player.name.includes('Master') || player.name.includes('Expert') ? 'red' :
+              'blue'
+            }>
+              AI
+            </Badge>
+          )}
+        </HStack>
+      </Flex>
+      
+      <Divider mb={2} />
+      
+      <Text fontSize="xs" mb={1}>Resources:</Text>
+      <Flex wrap="wrap" gap={1} mb={2}>
+        {isHuman ? (
+          // Show all resources for human player
+          Object.entries(player.resources).map(([resource, count]) => (
+            <ResourceCounter 
+              key={resource} 
+              type={resource as ResourceType} 
+              count={count}
+              showZero={true}
+            />
+          ))
+        ) : (
+          // Show resource count for AI players
+          <Badge colorScheme="gray">
+            {Object.values(player.resources).reduce((sum, count) => sum + count, 0)} cards
+          </Badge>
+        )}
+      </Flex>
+      
+      <Grid templateColumns="1fr 1fr" gap={1} fontSize="xs">
+        <HStack>
+          <GiSwordman />
+          <Text>Knights: {player.knightsPlayed}</Text>
+        </HStack>
+        <HStack>
+          <GiRoad />
+          <Text>Longest Road: {player.hasLongestRoad ? '✓' : '✗'}</Text>
+        </HStack>
+        <HStack>
+          <GiShield />
+          <Text>Dev Cards: {player.developmentCards.length}</Text>
+        </HStack>
+        <HStack>
+          <Text>Largest Army: {player.hasLargestArmy ? '✓' : '✗'}</Text>
+        </HStack>
+      </Grid>
     </Box>
   );
-} 
+};
+
+export const PlayerPanel = () => {
+  const { players, currentPlayer, phase, rollDice, endTurn, restartGame, diceRoll, longestRoad, largestArmy } = useGameStore();
+  
+  const currentPlayerObj = players.find(p => p.id === currentPlayer)!;
+  
+  return (
+    <VStack spacing={4} align="stretch">
+      <Box p={4} borderWidth="1px" borderRadius="lg" bg="white">
+        <Heading size="md" mb={4}>Game Info</Heading>
+        <Flex justify="space-between" align="center" mb={3}>
+          <Text>Phase:</Text>
+          <Badge colorScheme={phase === 'ROLL' ? 'blue' : phase === 'MAIN' ? 'green' : 'purple'}>
+            {phase}
+          </Badge>
+        </Flex>
+        
+        {diceRoll && (
+          <Flex justify="space-between" align="center" mb={3}>
+            <Text>Last Roll:</Text>
+            <Badge colorScheme="blue" fontSize="lg" px={3}>
+              {diceRoll}
+            </Badge>
+          </Flex>
+        )}
+        
+        <Grid templateColumns="1fr 1fr" gap={2} mb={3}>
+          <Box>
+            <Text fontWeight="bold" fontSize="sm">Longest Road</Text>
+            <Text>
+              {longestRoad.playerId ? 
+                players.find(p => p.id === longestRoad.playerId)?.name :
+                'None'
+              } ({longestRoad.length})
+            </Text>
+          </Box>
+          
+          <Box>
+            <Text fontWeight="bold" fontSize="sm">Largest Army</Text>
+            <Text>
+              {largestArmy.playerId ? 
+                players.find(p => p.id === largestArmy.playerId)?.name :
+                'None'
+              } ({largestArmy.size})
+            </Text>
+          </Box>
+        </Grid>
+        
+        <Divider my={2} />
+        
+        <Text fontSize="sm" fontStyle="italic" textAlign="center">
+          First player to reach 10 victory points wins!
+        </Text>
+        
+        <Divider my={3} />
+        
+        <VStack spacing={2}>
+          <Button 
+            colorScheme="blue" 
+            isFullWidth 
+            onClick={rollDice}
+            isDisabled={phase !== 'ROLL'}
+          >
+            Roll Dice
+          </Button>
+          
+          <Button 
+            colorScheme="green" 
+            isFullWidth 
+            onClick={endTurn}
+            isDisabled={phase === 'ROLL'}
+          >
+            End Turn
+          </Button>
+          
+          <Button 
+            colorScheme="red" 
+            variant="outline"
+            size="sm"
+            isFullWidth 
+            onClick={restartGame}
+          >
+            Restart Game
+          </Button>
+        </VStack>
+      </Box>
+      
+      <Box p={4} borderWidth="1px" borderRadius="lg" bg="white">
+        <Heading size="md" mb={4}>Players</Heading>
+        <VStack spacing={3} align="stretch">
+          {players.map(player => (
+            <PlayerCard 
+              key={player.id} 
+              player={player} 
+              isActive={player.id === currentPlayer}
+              isHuman={!isAIPlayer(player.name)}
+            />
+          ))}
+        </VStack>
+      </Box>
+    </VStack>
+  );
+}; 

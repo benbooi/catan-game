@@ -2,6 +2,23 @@ import { GameState, GameAction, GameError } from '../types/gameState';
 import { ResourceType } from '../types/game';
 // import { getNeighbors } from '../utils/boardLayout'; // Marked as unused
 
+// --- Helper Functions for Validation ---
+function getPlayerById(state: GameState, playerId: string) {
+  return state.players.find(p => p.id === playerId);
+}
+
+function getVertex(state: GameState, vertexId: number) {
+  return state.board.vertices.find(v => v.id === vertexId);
+}
+
+function getEdge(state: GameState, edgeId: number) {
+  return state.board.edges.find(e => e.id === edgeId);
+}
+
+function getHex(state: GameState, hexId: number) {
+  return state.board.hexes.find(h => h.id === hexId);
+}
+
 // --- Placeholder Adjacency Functions --- (Assume correct implementation exists elsewhere or will be added)
 function getAdjacentVertices(vertexId: number): number[] {
   console.warn('getAdjacentVertices placeholder used', vertexId);
@@ -14,7 +31,7 @@ function getAdjacentEdges(vertexId: number): number[] {
 
 // --- Main Validation Function ---
 export function validateGameAction(state: GameState, action: GameAction): GameError | null {
-  const player = state.players[state.currentPlayer];
+  const player = getPlayerById(state, state.currentPlayer);
   if (!player) return { code: 'INVALID_PLAYER', message: 'Player not found' };
 
   switch (action.type) {
@@ -73,8 +90,8 @@ function validateBuildSettlement(state: GameState, playerId: string, vertexId: n
     return { code: 'INVALID_PHASE', message: 'Cannot build settlement during this phase.' };
   }
 
-  const player = state.players[playerId];
-  const vertex = state.board.vertices[vertexId];
+  const player = getPlayerById(state, playerId);
+  const vertex = getVertex(state, vertexId);
 
   if (!vertex) {
     return { code: 'INVALID_LOCATION', message: 'Invalid vertex ID.' };
@@ -87,7 +104,7 @@ function validateBuildSettlement(state: GameState, playerId: string, vertexId: n
   const adjacentVertices = getAdjacentVertices(vertexId);
   for (const adjVertexId of adjacentVertices) {
     // Check if adjacent vertex exists before accessing building
-    const adjVertex = state.board.vertices[adjVertexId];
+    const adjVertex = getVertex(state, adjVertexId);
     if (adjVertex?.building) {
       return { code: 'INVALID_LOCATION', message: 'Too close to another settlement (distance rule).' };
     }
@@ -98,7 +115,7 @@ function validateBuildSettlement(state: GameState, playerId: string, vertexId: n
       // Setup specific rules (e.g., connecting to initial road on round 2)
       // Needs details from setupPhase structure (e.g., state.setupPhase.round, state.setupPhase.roadEdgeId)
        if (state.setupPhase.round === 2) {
-           const placedRoadEdge = state.board.edges[state.setupPhase.roadEdgeId!]; // Use non-null assertion if sure it exists
+           const placedRoadEdge = getEdge(state, state.setupPhase.roadEdgeId!); // Use non-null assertion if sure it exists
            if (!placedRoadEdge || !placedRoadEdge.vertices.includes(vertexId)) {
                return { code: 'INVALID_LOCATION', message: 'Second settlement must connect to the first placed road.' };
            }
@@ -108,7 +125,7 @@ function validateBuildSettlement(state: GameState, playerId: string, vertexId: n
       // MAIN Phase Rules
       // Connection Rule: Must connect to own road
       const isConnected = getAdjacentEdges(vertexId).some(edgeId => {
-           const edge = state.board.edges[edgeId];
+           const edge = getEdge(state, edgeId);
            return edge?.road?.playerId === playerId;
        });
       if (!isConnected) {
@@ -136,8 +153,8 @@ function validateBuildCity(state: GameState, playerId: string, vertexId: number)
     return { code: 'INVALID_PHASE', message: 'Cannot build city during this phase.' };
   }
 
-  const player = state.players[playerId];
-  const vertex = state.board.vertices[vertexId];
+  const player = getPlayerById(state, playerId);
+  const vertex = getVertex(state, vertexId);
 
   if (!vertex?.building || vertex.building.type !== 'settlement' || vertex.building.playerId !== playerId) {
     return { code: 'INVALID_LOCATION', message: 'Must upgrade one of your own settlements.' };
@@ -162,8 +179,8 @@ function validateBuildRoad(state: GameState, playerId: string, edgeId: number): 
     return { code: 'INVALID_PHASE', message: 'Cannot build road during this phase.' };
   }
 
-  const player = state.players[playerId];
-  const edge = state.board.edges[edgeId];
+  const player = getPlayerById(state, playerId);
+  const edge = getEdge(state, edgeId);
 
   if (!edge) {
       return { code: 'INVALID_LOCATION', message: 'Invalid edge ID.' };
@@ -184,10 +201,10 @@ function validateBuildRoad(state: GameState, playerId: string, edgeId: number): 
        // MAIN Phase Connection Rule: Must connect to own existing road, settlement, or city
        const [v1, v2] = edge.vertices;
        const isConnected = (
-           state.board.vertices[v1]?.building?.playerId === playerId ||
-           state.board.vertices[v2]?.building?.playerId === playerId ||
-           getAdjacentEdges(v1).some(adjEdgeId => state.board.edges[adjEdgeId]?.road?.playerId === playerId) || // Check adj edges at v1
-           getAdjacentEdges(v2).some(adjEdgeId => state.board.edges[adjEdgeId]?.road?.playerId === playerId)    // Check adj edges at v2
+           getVertex(state, v1)?.building?.playerId === playerId ||
+           getVertex(state, v2)?.building?.playerId === playerId ||
+           getAdjacentEdges(v1).some(adjEdgeId => getEdge(state, adjEdgeId)?.road?.playerId === playerId) || // Check adj edges at v1
+           getAdjacentEdges(v2).some(adjEdgeId => getEdge(state, adjEdgeId)?.road?.playerId === playerId)    // Check adj edges at v2
        );
        if (!isConnected) {
            return { code: 'INVALID_LOCATION', message: 'Road must connect to one of your existing roads, settlements, or cities.' };
@@ -213,7 +230,7 @@ function validateBuyDevelopmentCard(state: GameState, playerId: string): GameErr
     return { code: 'INVALID_PHASE', message: 'Cannot buy development card during this phase.' };
   }
 
-  const player = state.players[playerId];
+  const player = getPlayerById(state, playerId);
   const cost: Partial<Record<ResourceType, number>> = { ore: 1, wool: 1, grain: 1 };
 
   if (!hasEnoughResources(player.resources, cost)) {
@@ -233,7 +250,7 @@ function validatePlayDevelopmentCard(state: GameState, playerId: string, cardInd
     return { code: 'INVALID_PHASE', message: 'Cannot play development card during this phase.' };
   }
 
-  const player = state.players[playerId];
+  const player = getPlayerById(state, playerId);
   const card = player.developmentCards?.[cardIndex]; // Use optional chaining
 
   if (!card) {
@@ -272,7 +289,7 @@ function validateBankTrade(
     return { code: 'INVALID_PHASE', message: 'Cannot trade with the bank during this phase.' };
   }
 
-  const player = state.players[playerId];
+  const player = getPlayerById(state, playerId);
   const tradeRatio = getTradeRatio(state, playerId, give); // Get player-specific ratio
 
   const cost: Partial<Record<ResourceType, number>> = { [give]: tradeRatio };
@@ -307,7 +324,7 @@ function validateTradeOffer(
        return { code: 'INVALID_ACTION', message: 'Another trade offer is already active.' };
   }
 
-  const offeringPlayer = state.players[playerId];
+  const offeringPlayer = getPlayerById(state, playerId);
 
   // Validate offer amounts (must be non-negative integers)
   let offerAmount = 0;
@@ -355,8 +372,8 @@ function validateTradeAccept(state: GameState, acceptingPlayerId: string): GameE
       return { code: 'INVALID_ACTION', message: 'Cannot accept your own trade offer.' };
   }
 
-  const acceptingPlayer = state.players[acceptingPlayerId];
-  const offeringPlayer = state.players[state.tradeOffer.playerId];
+  const acceptingPlayer = getPlayerById(state, acceptingPlayerId);
+  const offeringPlayer = getPlayerById(state, state.tradeOffer.playerId);
   const { offer, request } = state.tradeOffer;
 
   // Check if accepting player exists and has the requested resources
@@ -390,7 +407,7 @@ function validateMoveRobber(
        return { code: 'INVALID_PHASE', message: 'Cannot move robber now.' };
   }
 
-  const targetHex = state.board.hexes[hexId];
+  const targetHex = getHex(state, hexId);
   // Cannot place on desert or invalid hex index
   if (!targetHex || targetHex.type === 'desert') {
       return { code: 'INVALID_LOCATION', message: 'Invalid hex selected for robber (cannot be desert).' };
@@ -404,9 +421,9 @@ function validateMoveRobber(
   // Determine players adjacent to the target hex with resources, excluding self
   const potentialTargets = new Set<string>();
   targetHex.vertices.forEach(vertexId => {
-      const buildingPlayerId = state.board.vertices[vertexId]?.building?.playerId;
+      const buildingPlayerId = getVertex(state, vertexId)?.building?.playerId;
       if (buildingPlayerId && buildingPlayerId !== state.currentPlayer) {
-          const player = state.players[buildingPlayerId];
+          const player = getPlayerById(state, buildingPlayerId);
           // Check if player exists and has any resources
           if (player && Object.values(player.resources).some(count => count > 0)) {
               potentialTargets.add(buildingPlayerId);
@@ -421,7 +438,7 @@ function validateMoveRobber(
         return { code: 'INVALID_TARGET', message: 'Cannot steal from yourself.' };
     }
     // Target must exist
-    if (!state.players[targetPlayerId]) {
+    if (!getPlayerById(state, targetPlayerId)) {
         return { code: 'INVALID_TARGET', message: 'Target player does not exist.' };
     }
     // Target must be adjacent and have resources
@@ -473,7 +490,7 @@ function validateEndTurn(state: GameState): GameError | null {
 // Helper to get trade ratio, considering ports
 function getTradeRatio(state: GameState, playerId: string, resource: ResourceType): number {
   let minRatio = 4; // Default bank ratio
-  const player = state.players[playerId];
+  const player = getPlayerById(state, playerId);
   if (!player) return minRatio; // Should not happen if called after player validation
 
   // Find vertices occupied by the player
@@ -521,7 +538,7 @@ export const gameValidator = {
   },
 
   canBuildSettlement: (state: GameState, vertexId: number): boolean => {
-    const vertex = state.board.vertices[vertexId];
+    const vertex = getVertex(state, vertexId);
     if (!vertex) return false;
 
     // Check if vertex is already occupied
@@ -529,6 +546,7 @@ export const gameValidator = {
 
     // Check if adjacent vertices are occupied
     const hasAdjacentSettlement = getAdjacentVertices(vertexId).some(adjId => {
+      const adjVertex = getVertex(state, adjId);
       const adjVertex = state.board.vertices[adjId];
       return adjVertex?.building !== undefined;
     });

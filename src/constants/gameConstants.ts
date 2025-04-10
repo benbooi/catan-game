@@ -1,5 +1,5 @@
 import { GameRules, BuildCost } from '../types/gameLogic';
-import { ResourceType, DevelopmentCardType, DevelopmentCard } from '../types/game';
+import { ResourceType, DevelopmentCardType } from '../types/game';
 
 export const RESOURCE_TYPES: ResourceType[] = ['wood', 'brick', 'ore', 'grain', 'wool'];
 
@@ -88,12 +88,26 @@ export const DEFAULT_GAME_RULES: GameRules = {
   robberThreshold: 7,
   buildCosts: DEFAULT_BUILD_COSTS,
   developmentCards: {
-    knight: 14,
-    victoryPoint: 5,
+    knights: 14,
+    victoryPoints: 5,
     roadBuilding: 2,
     yearOfPlenty: 2,
     monopoly: 2,
   },
+  setupRules: {
+    settlementsPerPlayer: 2,
+    roadsPerPlayer: 2,
+  },
+  bankTrade: {
+    defaultRatio: 4,
+    portRatios: {
+      wood: 2,
+      brick: 2,
+      ore: 2,
+      grain: 2,
+      wool: 2,
+    },
+  }
 };
 
 export const RESOURCE_DISTRIBUTION: Record<ResourceType | 'desert', number> = {

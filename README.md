@@ -1,92 +1,88 @@
-# Catan
+# Catan Game
 
 A web-based implementation of the classic board game Settlers of Catan using React, TypeScript, and Chakra UI.
 
+## Demo
+
+This game is deployed on GitHub Pages at [https://benbooi.github.io/catan-game/](https://benbooi.github.io/catan-game/).
+
+Last updated: May 2023
+
 ## Features
 
-- Full implementation of Catan game rules
-- Beautiful and responsive UI
-- Real-time game state management
-- Support for 2-4 players
-- Trading system with other players and bank
-- Development cards
-- Resource management
-- Victory point tracking
+- Simplified Catan game board with hexes, settlements, cities, and roads
+- Build settlements and roads by clicking on the board
+- Roll dice and take turns
+- Track resources and victory points
+- Mobile-responsive design
 
-## Getting Started
+## Technologies Used
+
+- React 18
+- TypeScript 5
+- Vite
+- Chakra UI
+- Zustand for state management
+- React Icons
+
+## Development
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js 16+
 - npm or yarn
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/catan.git
-cd catan
+1. Clone the repository
+   ```
+   git clone https://github.com/benbooi/catan-game.git
+   cd catan-game
+   ```
+
+2. Install dependencies
+   ```
+   npm install
+   ```
+
+3. Start the development server
+   ```
+   npm run dev
+   ```
+
+4. Open [http://localhost:5173/catan-game/](http://localhost:5173/catan-game/) in your browser
+
+### Build for Production
+
+```
+npm run build
 ```
 
-2. Install dependencies:
-```bash
-npm install
-# or
-yarn install
-```
+This will create a `dist` folder with the built assets.
 
-3. Start the development server:
-```bash
-npm run dev
-# or
-yarn dev
-```
+## Deployment
 
-4. Open [http://localhost:5173](http://localhost:5173) in your browser.
+The project is set up to be deployed to GitHub Pages using GitHub Actions. Any push to the main branch will automatically trigger a deployment.
 
-## Game Rules
+## Game Rules (Simplified)
 
-### Setup Phase
-1. Players take turns placing their initial settlements and roads
-2. First round goes clockwise, second round goes counter-clockwise
-3. Players receive resources for their second settlement placement
+- Players take turns rolling dice and collecting resources
+- Build settlements (1 VP) and cities (2 VP) by clicking on intersections
+- Build roads by clicking on edges between intersections
+- First player to reach 10 victory points wins
 
-### Main Game
-1. Roll dice for resource production
-2. Players can:
-   - Build roads (1 brick, 1 lumber)
-   - Build settlements (1 brick, 1 lumber, 1 wool, 1 grain)
-   - Build cities (2 grain, 3 ore)
-   - Buy development cards (1 ore, 1 wool, 1 grain)
-   - Trade with other players or the bank
-3. First player to reach 10 victory points wins
+## Future Improvements
 
-### Development Cards
-- Knight: Move the robber and steal a resource
-- Victory Point: Worth 1 victory point
-- Road Building: Build 2 roads for free
-- Year of Plenty: Take any 2 resources from the bank
-- Monopoly: Name a resource and take all of that type from other players
-
-### Trading
-- Player trading: Negotiate resources with other players
-- Bank trading: Trade 4 of one resource for 1 of another
-- Port trading: If you have a settlement/city on a port, trade at 3:1 or 2:1 ratio
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+- Implement full Catan rules including trading
+- Add proper validation for building placement
+- Improve visual design of the board
+- Add multiplayer support
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 
-## Acknowledgments
+## Acknowledgements
 
-- Based on the board game Settlers of Catan by Klaus Teuber
-- Built with React, TypeScript, and Chakra UI
-- Special thanks to the open-source community
+- Based on the board game [Settlers of Catan](https://www.catan.com/) by Klaus Teuber
+- Built with [React](https://reactjs.org/), [TypeScript](https://www.typescriptlang.org/), and [Chakra UI](https://chakra-ui.com/)

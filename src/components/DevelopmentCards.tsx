@@ -1,7 +1,6 @@
 import { Box, Button, Heading, VStack, Text, Wrap, WrapItem, Tooltip } from '@chakra-ui/react';
 import { useGameStore } from '../store/gameStore';
-import { DevelopmentCard, DevelopmentCardType } from '../types/game';
-import { Player } from '../types/game';
+import { type DevelopmentCardType, type DevelopmentCard, Player } from '../types/game';
 
 const CARD_COLORS = {
   knight: 'red.100',
@@ -72,7 +71,7 @@ export function DevelopmentCards() {
     playedDevelopmentCard: state.playedDevelopmentCard
   }));
 
-  const player: Player | undefined = players[currentPlayer];
+  const player: Player | undefined = players.find(p => p.id === currentPlayer);
 
   const canInteract = phase === 'MAIN';
 

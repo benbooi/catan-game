@@ -7,8 +7,8 @@ import { Hex, Vertex, Edge, Port } from '../types/game';
  */
 export function initializeBoard() {
   const hexes: Hex[] = [];
-  const vertices: Record<number, Vertex> = {};
-  const edges: Record<number, Edge> = {};
+  const verticesRecord: Record<number, Vertex> = {};
+  const edgesRecord: Record<number, Edge> = {};
   const ports: Port[] = [];
   
   // Create 19 hexes (5 resource types + desert)
@@ -36,7 +36,7 @@ export function initializeBoard() {
   
   // Create vertices (54 for a standard Catan board)
   for (let i = 0; i < 54; i++) {
-    vertices[i] = {
+    verticesRecord[i] = {
       id: i,
       x: i % 9, // Simple grid for demo
       y: Math.floor(i / 9),
@@ -52,22 +52,22 @@ export function initializeBoard() {
     const v1 = i % 54; // Simplistic connection
     const v2 = (i + 1) % 54; // Simplistic connection
     
-    edges[i] = {
+    edgesRecord[i] = {
       id: i,
       vertices: [v1, v2],
       // No initial roads
     };
     
     // Add edge to vertices' adjacentEdges
-    vertices[v1].adjacentEdges.push(i);
-    vertices[v2].adjacentEdges.push(i);
+    verticesRecord[v1].adjacentEdges.push(i);
+    verticesRecord[v2].adjacentEdges.push(i);
     
     // Add vertices to each other's adjacentVertices
-    if (!vertices[v1].adjacentVertices.includes(v2)) {
-      vertices[v1].adjacentVertices.push(v2);
+    if (!verticesRecord[v1].adjacentVertices.includes(v2)) {
+      verticesRecord[v1].adjacentVertices.push(v2);
     }
-    if (!vertices[v2].adjacentVertices.includes(v1)) {
-      vertices[v2].adjacentVertices.push(v1);
+    if (!verticesRecord[v2].adjacentVertices.includes(v1)) {
+      verticesRecord[v2].adjacentVertices.push(v1);
     }
   }
   
@@ -102,6 +102,10 @@ export function initializeBoard() {
       vertices: [v1, v2]
     });
   }
+  
+  // Convert record-based objects to arrays
+  const vertices: Vertex[] = Object.values(verticesRecord);
+  const edges: Edge[] = Object.values(edgesRecord);
   
   return {
     hexes,

@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { GameState, GameAction, GameError } from '../types/gameState';
-import { Player, ResourceType, DevelopmentCard, Hex, Vertex, Edge, Port, GamePhase } from '../types/game';
+import { Player, GamePhase } from '../types/game';
 import { gameReducer } from '../reducers/gameReducer';
 import { validateGameAction } from '../validators/gameValidator';
 import { calculateLongestRoad } from '../utils/longestRoad';
 import { calculateVictoryPoints } from '../utils/scoring';
 import { INITIAL_RESOURCES, DEVELOPMENT_CARDS } from '../constants/gameConstants';
+import { initializeBoard } from '../initializers/boardInitializer';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper to create initial players
@@ -30,66 +31,6 @@ const createInitialPlayers = (numPlayers: number): Record<string, Player> => {
   return players;
 };
 
-// Simple function to initialize a basic board
-const initializeBoard = () => {
-  const hexes: Hex[] = [];
-  const vertices: Record<number, Vertex> = {};
-  const edges: Record<number, Edge> = {};
-  const ports: Port[] = [];
-  
-  // Create some basic hexes for demo
-  for (let i = 0; i < 19; i++) {
-    const resourceTypes = ['wood', 'brick', 'ore', 'grain', 'wool', 'desert'] as const;
-    const type = resourceTypes[i % resourceTypes.length];
-    
-    hexes.push({
-      id: i,
-      type: type,
-      hasRobber: type === 'desert',
-      number: type === 'desert' ? undefined : ((i % 11) + 2),
-      vertices: [],
-      edges: []
-    });
-  }
-  
-  // Create some vertices
-  for (let i = 0; i < 54; i++) {
-    vertices[i] = {
-      id: i,
-      x: i % 6,
-      y: Math.floor(i / 6),
-      adjacentVertices: [],
-      adjacentEdges: []
-    };
-  }
-  
-  // Create some edges
-  for (let i = 0; i < 72; i++) {
-    edges[i] = {
-      id: i,
-      vertices: [i % 54, (i + 1) % 54]
-    };
-  }
-  
-  // Create some ports
-  for (let i = 0; i < 9; i++) {
-    const portTypes = ['any', 'wood', 'brick', 'ore', 'grain', 'wool'] as const;
-    ports.push({
-      type: portTypes[i % portTypes.length],
-      ratio: i < 4 ? 3 : 2,
-      vertices: [i * 6, i * 6 + 1]
-    });
-  }
-  
-  return {
-    hexes,
-    vertices,
-    edges,
-    ports,
-    robber: { hexId: hexes.findIndex(h => h.type === 'desert') }
-  };
-};
-
 // Initialize the game state
 const initialBoard = initializeBoard();
 const initialPlayers = createInitialPlayers(2); // Start with 2 players
@@ -102,7 +43,8 @@ const initialState: GameState = {
   phase: 'SETUP', // Initial phase
   turnNumber: 1,
   diceRoll: null,
-  developmentCardDeck: [...DEVELOPMENT_CARDS], // Use the development cards from constants
+  // Create an array of development cards based on the counts in DEVELOPMENT_CARDS
+  developmentCardDeck: [] as GameState['developmentCardDeck'],
   longestRoad: { playerId: null, length: 0 },
   largestArmy: { playerId: null, size: 0 },
   tradeOffer: null,

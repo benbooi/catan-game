@@ -1,4 +1,4 @@
-import { Player, Hex, Vertex, Edge, Port, ResourceType, GamePhase } from './game';
+import { Player, Hex, Vertex, Edge, Port, ResourceType, GamePhase, DevelopmentCard } from './game';
 
 export interface GameState {
   players: Player[];
@@ -36,15 +36,16 @@ export interface GameState {
     settlementVertexId?: number;
     roadEdgeId?: number;
   };
-  developmentCardDeck?: DevelopmentCard[];
-  playedDevelopmentCard?: boolean;
-  mustMoveRobber?: boolean;
-  diceRolled?: boolean;
+  developmentCardDeck: DevelopmentCard[];
+  playedDevelopmentCard: boolean;
+  mustMoveRobber: boolean;
+  diceRolled: boolean;
   winner?: string;
 }
 
 export interface GameError {
-  code: 'INVALID_PHASE' | 'INVALID_PLAYER' | 'INSUFFICIENT_RESOURCES' | 'INVALID_LOCATION' | 'INVALID_TRADE';
+  code: 'INVALID_PHASE' | 'INVALID_PLAYER' | 'INSUFFICIENT_RESOURCES' | 'INVALID_LOCATION' | 'INVALID_TRADE' | 
+    'INVALID_ACTION' | 'LIMIT_REACHED' | 'INVALID_TARGET' | 'MISSING_TARGET' | 'ACTION_REQUIRED';
   message: string;
 }
 

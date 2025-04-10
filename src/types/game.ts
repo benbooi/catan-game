@@ -1,37 +1,43 @@
 export type ResourceType = 'wood' | 'brick' | 'ore' | 'grain' | 'wool';
+export type HexType = ResourceType | 'desert';
+export type PlayerColor = 'red' | 'blue' | 'green' | 'orange';
+export type BuildingType = 'settlement' | 'city';
 export type DevelopmentCardType = 'knight' | 'victoryPoint' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly';
-
 export type GamePhase = 'SETUP' | 'ROLL' | 'MAIN' | 'ROBBER' | 'FINISHED';
 
 export interface Player {
   id: string;
   name: string;
-  color: string;
+  color: PlayerColor;
   resources: Record<ResourceType, number>;
   developmentCards: DevelopmentCard[];
   score: number;
   knightsPlayed: number;
-  hasLongestRoad?: boolean;
-  hasLargestArmy?: boolean;
+  hasLongestRoad: boolean;
+  hasLargestArmy: boolean;
 }
 
 export interface Hex {
   id: number;
-  type: ResourceType | 'desert';
+  type: HexType;
   number?: number;
   hasRobber: boolean;
-  vertices: number[];
-  edges: number[];
+  position: {
+    x: number;
+    y: number;
+  };
 }
 
 export interface Vertex {
   id: number;
-  x: number;
-  y: number;
+  position: {
+    x: number;
+    y: number;
+  };
+  adjacentHexes: number[];
   adjacentVertices: number[];
-  adjacentEdges: number[];
   building?: {
-    type: 'settlement' | 'city';
+    type: BuildingType;
     playerId: string;
   };
 }
@@ -45,45 +51,53 @@ export interface Edge {
 }
 
 export interface DevelopmentCard {
-  type: 'knight' | 'roadBuilding' | 'yearOfPlenty' | 'monopoly' | 'victoryPoint';
+  type: DevelopmentCardType;
   used: boolean;
-  turnPurchased?: number;
+  turnPurchased: number;
+}
+
+export interface Port {
+  type: ResourceType | 'any';
+  ratio: number;
+  vertices: number[];
+  position: {
+    x: number;
+    y: number;
+    rotation: number;
+  };
+}
+
+export interface GameBoard {
+  hexes: Hex[];
+  vertices: Vertex[];
+  edges: Edge[];
+  ports: Port[];
+  robber: {
+    hexId: number;
+  };
 }
 
 export interface GameState {
   players: Player[];
-  currentPlayer: number;
-  board: {
-    hexes: Hex[];
-    vertices: Vertex[];
-    edges: Edge[];
-  };
-  dice: {
-    lastRoll: [number, number] | null;
-  };
+  currentPlayer: string;
+  board: GameBoard;
   phase: GamePhase;
-  trade?: Trade;
-  gameLog: string[];
-}
-
-export interface Trade {
-  from: number;
-  to: number | 'bank';
-  give: Partial<Record<ResourceType, number>>;
-  want: Partial<Record<ResourceType, number>>;
-}
-
-export interface Building {
-  type: 'settlement' | 'city';
-  player: number;
-}
-
-export interface Road {
-  player: number;
-}
-
-export interface Port {
-  type: ResourceType | 'any' | 'generic';
-  ratio: number;
-  vertices: [number, number];
+  turnNumber: number;
+  diceRoll: number | null;
+  setupPhase: {
+    round: number;
+    direction: 'forward' | 'backward';
+    settlementsPlaced: number;
+    roadsPlaced: number;
+  } | null;
+  longestRoad: {
+    playerId: string | null;
+    length: number;
+  };
+  largestArmy: {
+    playerId: string | null;
+    size: number;
+  };
+  developmentCards: DevelopmentCard[];
+  winner: string | null;
 } 

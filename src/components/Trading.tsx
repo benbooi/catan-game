@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
     Box, Button, Heading, VStack, HStack, Select, NumberInput, 
     NumberInputField, NumberInputStepper, NumberIncrementStepper, 
-    NumberDecrementStepper, Text, Wrap, WrapItem, Badge, Divider 
+    NumberDecrementStepper, Text, Wrap, WrapItem, Divider 
 } from '@chakra-ui/react';
 import { useGameStore } from '../store/gameStore';
 import { ResourceType } from '../types/game';
-import { Player } from '../types/game';
 
 // Define resource information for UI
 const resourceInfo: Record<ResourceType, { color: string }> = {
@@ -32,19 +31,19 @@ export function Trading() {
   const [bankGiveResource, setBankGiveResource] = useState<ResourceType>('wood');
   const [bankReceiveResource, setBankReceiveResource] = useState<ResourceType>('brick');
 
-  const player = players[currentPlayer];
+  const player = players.find(p => p.id === currentPlayer);
   const canTrade = phase === 'MAIN';
 
   // Calculate bank trade ratio for the selected resource
   const calculateBankRatio = (resource: ResourceType): number => {
     let minRatio = 4;
     if (!player) return minRatio;
-    const playerVertices = Object.keys(board.vertices)
-        .map(Number)
-        .filter(id => board.vertices[id]?.building?.playerId === player.id);
+    const playerVertices = board.vertices
+        .filter(v => v.building?.playerId === player.id)
+        .map(v => v.id);
     board.ports?.forEach(port => {
         if (port.vertices.some(pv => playerVertices.includes(pv))) {
-            if (port.type === 'generic' || port.type === resource) {
+            if (port.type === 'any' || port.type === resource) {
                 minRatio = Math.min(minRatio, port.ratio);
             }
         }
